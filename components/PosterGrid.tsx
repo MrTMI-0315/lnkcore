@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { RefObject } from "react";
 
 export type PosterPayload = {
@@ -18,7 +18,7 @@ type PosterGridProps = {
   canShare: boolean;
   copiedImage: boolean;
   isLoading: boolean;
-  onReadyChange: (ready: boolean) => void;
+  onProgressChange: (loaded: number, total: number) => void;
   poster: PosterPayload | null;
   posterRef: RefObject<HTMLDivElement | null>;
   shareHref: string;
@@ -45,32 +45,35 @@ export function PosterGrid({
   canShare,
   copiedImage,
   isLoading,
-  onReadyChange,
+  onProgressChange,
   poster,
   posterRef,
   shareHref,
   onCopyImage,
   onDownload
 }: PosterGridProps) {
-  const [loadedCount, setLoadedCount] = useState(0);
-  const loadedImages = useRef(new Set<string>());
+  const [loadedImages, setLoadedImages] = useState<Record<string, true>>({});
   const totalImages = useMemo(
     () => poster?.images.filter((image) => Boolean(image.url)).length ?? 0,
     [poster]
   );
-  const isReady = !poster || totalImages === 0 || loadedCount >= totalImages;
+  const loadedCount = Object.keys(loadedImages).length;
 
   useEffect(() => {
-    onReadyChange(isReady);
-  }, [isReady, onReadyChange]);
+    onProgressChange(loadedCount, totalImages);
+  }, [loadedCount, onProgressChange, totalImages]);
 
   const handleImageLoad = (imageKey: string) => {
-    if (loadedImages.current.has(imageKey)) {
-      return;
-    }
+    setLoadedImages((currentLoadedImages) => {
+      if (currentLoadedImages[imageKey]) {
+        return currentLoadedImages;
+      }
 
-    loadedImages.current.add(imageKey);
-    setLoadedCount((currentCount) => currentCount + 1);
+      return {
+        ...currentLoadedImages,
+        [imageKey]: true
+      };
+    });
   };
 
   const gridItems =
@@ -91,36 +94,46 @@ export function PosterGrid({
         </h2>
 
         <div className="grid grid-cols-3 gap-[2px] overflow-hidden rounded-[1.35rem] bg-zinc-900 p-[2px]">
-          {gridItems.map((image, index) =>
-            image.url ? (
+          {gridItems.map((image, index) => {
+            const imageKey = `${image.query}-${index}`;
+            const hasLoaded = Boolean(loadedImages[imageKey]);
+
+            if (image.url) {
+              return (
+                <div
+                  key={imageKey}
+                  className="group relative aspect-square overflow-hidden border border-zinc-800 bg-zinc-950"
+                >
+                  {!hasLoaded ? (
+                    <div className="absolute inset-0 animate-pulse bg-zinc-800" />
+                  ) : null}
+                  <Image
+                    alt={image.query}
+                    className={`h-full w-full object-cover transition-all duration-500 group-hover:scale-105 ${
+                      hasLoaded ? "opacity-100" : "opacity-0"
+                    }`}
+                    fill
+                    onLoad={() => {
+                      handleImageLoad(imageKey);
+                    }}
+                    sizes="(max-width: 768px) 30vw, 220px"
+                    src={image.url}
+                  />
+                </div>
+              );
+            }
+
+            return (
               <div
-                key={`${image.query}-${index}`}
-                className={`group relative aspect-square overflow-hidden bg-zinc-950 transition-opacity duration-700 ${
-                  isLoading || !isReady ? "opacity-0" : "opacity-100"
-                }`}
-              >
-                <Image
-                  alt={image.query}
-                  className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
-                  fill
-                  onLoad={() => {
-                    handleImageLoad(`${image.query}-${index}`);
-                  }}
-                  sizes="(max-width: 768px) 30vw, 220px"
-                  src={image.url}
-                />
-              </div>
-            ) : (
-              <div
-                key={`${image.query}-${index}`}
+                key={imageKey}
                 className={`flex aspect-square items-center justify-center border border-zinc-800 bg-zinc-900 px-3 text-center text-[10px] uppercase tracking-[0.25em] text-zinc-500 ${
                   isLoading ? "animate-pulse" : ""
                 }`}
               >
                 {poster ? fallbackLabel(image.query) : ""}
               </div>
-            )
-          )}
+            );
+          })}
         </div>
 
         <p className="mt-2 text-center text-xs uppercase tracking-wide text-zinc-400 opacity-60">

@@ -115,66 +115,84 @@ function getFallbackKeyword(keyword: string) {
 }
 
 async function resolveImages(queries: string[]) {
+  const initialImages = await Promise.all(
+    queries.map(async (query) => {
+      try {
+        return {
+          query,
+          url: await searchImage(query)
+        };
+      } catch (caughtError) {
+        if (
+          caughtError instanceof UnsplashError &&
+          (caughtError.status === 429 || caughtError.code === "missing_key")
+        ) {
+          throw caughtError;
+        }
+
+        return {
+          query,
+          url: null
+        };
+      }
+    })
+  );
+
   const usedUrls = new Set<string>();
-  const images: Array<{ query: string; url: string | null }> = [];
-
-  for (const query of queries) {
-    try {
-      const url = await searchImage(query, {
-        excludeUrls: usedUrls
-      });
-
-      if (url) {
-        usedUrls.add(url);
-      }
-
-      images.push({
-        query,
-        url
-      });
-    } catch (caughtError) {
-      if (
-        caughtError instanceof UnsplashError &&
-        (caughtError.status === 429 || caughtError.code === "missing_key")
-      ) {
-        throw caughtError;
-      }
-
-      images.push({
-        query,
+  const images = initialImages.map((image) => {
+    if (!image.url || usedUrls.has(image.url)) {
+      return {
+        ...image,
         url: null
-      });
+      };
     }
-  }
+
+    usedUrls.add(image.url);
+    return image;
+  });
 
   const failedIndexes = images
     .map((image, index) => (image.url ? null : index))
     .filter((index): index is number => index !== null);
 
-  for (const [offset, failedIndex] of failedIndexes.entries()) {
-    const fillerQuery =
-      GENERIC_FILLER_QUERIES[offset % GENERIC_FILLER_QUERIES.length];
+  const fillerResults = await Promise.all(
+    failedIndexes.map(async (failedIndex, offset) => {
+      const fillerQuery =
+        GENERIC_FILLER_QUERIES[offset % GENERIC_FILLER_QUERIES.length];
 
-    try {
-      const url = await searchImage(fillerQuery, {
-        excludeUrls: usedUrls
-      });
-
-      if (url) {
-        usedUrls.add(url);
-        images[failedIndex] = {
+      try {
+        return {
+          failedIndex,
           query: fillerQuery,
-          url
+          url: await searchImage(fillerQuery)
+        };
+      } catch (caughtError) {
+        if (
+          caughtError instanceof UnsplashError &&
+          (caughtError.status === 429 || caughtError.code === "missing_key")
+        ) {
+          throw caughtError;
+        }
+
+        return {
+          failedIndex,
+          query: fillerQuery,
+          url: null
         };
       }
-    } catch (caughtError) {
-      if (
-        caughtError instanceof UnsplashError &&
-        (caughtError.status === 429 || caughtError.code === "missing_key")
-      ) {
-        throw caughtError;
-      }
+    })
+  );
+
+  for (const fillerResult of fillerResults) {
+    if (!fillerResult.url || usedUrls.has(fillerResult.url)) {
+      continue;
     }
+
+    usedUrls.add(fillerResult.url);
+    images[fillerResult.failedIndex] = {
+      query: fillerResult.query,
+      url: fillerResult.url
+    };
   }
 
   return images;

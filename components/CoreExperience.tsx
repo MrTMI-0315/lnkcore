@@ -17,10 +17,22 @@ import { CORES, EXAMPLE_CORES, keywordToSlug, normalizeKeyword } from "@/lib/cor
 
 const SHARE_TEXT = "Check out my aesthetic core poster";
 const UNSPLASH_FALLBACK_MESSAGE = "Couldn't find images for this core.";
+const POPULAR_PRELOAD_CORES = ["tokyo core", "seoul core", "cafe core"] as const;
+const STATUS_LABELS = {
+  building: "Building your core...",
+  curating: "Curating images...",
+  idle: "tumblr moodboard generator",
+  searching: "Searching aesthetic..."
+} as const;
+
+type LoadingStage = keyof typeof STATUS_LABELS;
 
 type CoreExperienceProps = {
   initialKeyword?: string;
 };
+
+const clientPosterCache = new Map<string, PosterPayload>();
+let popularCoresPreloaded = false;
 
 function buildShareUrl(url: string) {
   const shareUrl = new URL("https://twitter.com/intent/tweet");
@@ -33,20 +45,44 @@ function buildShareUrl(url: string) {
   return shareUrl.toString();
 }
 
+function buildPlaceholderKeywords(keyword: string) {
+  const tokens = keyword
+    .split(/\s+/)
+    .map((token) => token.toLowerCase())
+    .filter((token) => token && token !== "core")
+    .slice(0, 2);
+
+  return [...tokens, "mood", "poster", "aesthetic"].slice(0, 5);
+}
+
+function buildPlaceholderPoster(keyword: string): PosterPayload {
+  return {
+    title: keyword.trim().toUpperCase(),
+    queries: Array.from({ length: 9 }, (_, index) => `placeholder-${index + 1}`),
+    keywords: buildPlaceholderKeywords(keyword),
+    images: Array.from({ length: 9 }, (_, index) => ({
+      query: `placeholder-${index + 1}`,
+      url: null
+    }))
+  };
+}
+
 export function CoreExperience({ initialKeyword }: CoreExperienceProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [keyword, setKeyword] = useState(initialKeyword ?? "");
   const [poster, setPoster] = useState<PosterPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [isFetchingPoster, setIsFetchingPoster] = useState(false);
   const [isPosterReady, setIsPosterReady] = useState(false);
+  const [hasResolvedImages, setHasResolvedImages] = useState(false);
+  const [loadingStage, setLoadingStage] = useState<LoadingStage>("idle");
   const [copiedImage, setCopiedImage] = useState(false);
   const [savedToastVisible, setSavedToastVisible] = useState(false);
   const [pageUrl, setPageUrl] = useState("");
   const posterRef = useRef<HTMLDivElement>(null);
 
-  const isBusy = isGenerating || (Boolean(poster) && !isPosterReady);
+  const isBusy = isFetchingPoster || (hasResolvedImages && !isPosterReady);
   const normalizedInitialKeyword = useMemo(
     () => normalizeKeyword(initialKeyword ?? ""),
     [initialKeyword]
@@ -69,11 +105,26 @@ export function CoreExperience({ initialKeyword }: CoreExperienceProps) {
       return;
     }
 
+    const normalizedKeyword = normalizeKeyword(trimmedKeyword);
+
     setError(null);
     setCopiedImage(false);
-    setPoster(null);
+    setPoster(buildPlaceholderPoster(trimmedKeyword));
+    setHasResolvedImages(false);
     setIsPosterReady(false);
-    setIsGenerating(true);
+    setIsFetchingPoster(true);
+    setLoadingStage("searching");
+
+    const cachedPoster = clientPosterCache.get(normalizedKeyword);
+
+    if (cachedPoster) {
+      setPoster(cachedPoster);
+      setKeyword(trimmedKeyword);
+      setHasResolvedImages(true);
+      setIsFetchingPoster(false);
+      setLoadingStage("curating");
+      return;
+    }
 
     try {
       const response = await fetch("/api/generate", {
@@ -99,9 +150,13 @@ export function CoreExperience({ initialKeyword }: CoreExperienceProps) {
         throw new Error(message);
       }
 
+      clientPosterCache.set(normalizedKeyword, data);
+
       startTransition(() => {
         setPoster(data);
         setKeyword(trimmedKeyword);
+        setHasResolvedImages(true);
+        setLoadingStage("curating");
       });
     } catch (caughtError) {
       const message =
@@ -109,10 +164,11 @@ export function CoreExperience({ initialKeyword }: CoreExperienceProps) {
           ? caughtError.message
           : UNSPLASH_FALLBACK_MESSAGE;
 
-      setPoster(null);
       setError(message);
+      setHasResolvedImages(false);
+      setLoadingStage("idle");
     } finally {
-      setIsGenerating(false);
+      setIsFetchingPoster(false);
     }
   }, []);
 
@@ -126,6 +182,13 @@ export function CoreExperience({ initialKeyword }: CoreExperienceProps) {
       }
 
       setKeyword(trimmedKeyword);
+      setPoster(buildPlaceholderPoster(trimmedKeyword));
+      setHasResolvedImages(false);
+      setIsPosterReady(false);
+      setIsFetchingPoster(true);
+      setLoadingStage("searching");
+      setError(null);
+
       const slug = keywordToSlug(trimmedKeyword);
       const targetPath = `/core/${slug}`;
 
@@ -134,10 +197,6 @@ export function CoreExperience({ initialKeyword }: CoreExperienceProps) {
         return;
       }
 
-      setPoster(null);
-      setError(null);
-      setIsPosterReady(false);
-      setIsGenerating(true);
       router.push(targetPath);
     },
     [fetchPoster, pathname, router]
@@ -214,13 +273,45 @@ export function CoreExperience({ initialKeyword }: CoreExperienceProps) {
     navigateToCore(targetKeyword);
   }, [fetchPoster, initialKeyword, keyword, navigateToCore, normalizedInitialKeyword]);
 
+  const handlePosterProgress = useCallback(
+    (loaded: number, total: number) => {
+      if (!hasResolvedImages) {
+        setIsPosterReady(false);
+        return;
+      }
+
+      if (total === 0) {
+        setIsPosterReady(true);
+        setLoadingStage("idle");
+        return;
+      }
+
+      if (loaded === 0) {
+        setIsPosterReady(false);
+        setLoadingStage("curating");
+        return;
+      }
+
+      if (loaded < total) {
+        setIsPosterReady(false);
+        setLoadingStage("building");
+        return;
+      }
+
+      setIsPosterReady(true);
+      setLoadingStage("idle");
+    },
+    [hasResolvedImages]
+  );
+
   useEffect(() => {
     syncPageUrl();
   }, [pathname, syncPageUrl]);
 
   useEffect(() => {
     if (!initialKeyword) {
-      setIsGenerating(false);
+      setIsFetchingPoster(false);
+      setLoadingStage("idle");
       return;
     }
 
@@ -256,6 +347,49 @@ export function CoreExperience({ initialKeyword }: CoreExperienceProps) {
     };
   }, [savedToastVisible]);
 
+  useEffect(() => {
+    if (popularCoresPreloaded || typeof window === "undefined") {
+      return;
+    }
+
+    popularCoresPreloaded = true;
+
+    const timeoutId = window.setTimeout(() => {
+      void Promise.all(
+        POPULAR_PRELOAD_CORES.map(async (coreKeyword) => {
+          if (clientPosterCache.has(coreKeyword)) {
+            return;
+          }
+
+          try {
+            const response = await fetch("/api/generate", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({
+                keyword: coreKeyword
+              })
+            });
+
+            if (!response.ok) {
+              return;
+            }
+
+            const data = (await response.json()) as PosterPayload;
+            clientPosterCache.set(coreKeyword, data);
+          } catch {
+            return;
+          }
+        })
+      );
+    }, 1200);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, []);
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(24,24,27,0.96),_rgba(0,0,0,0.98)_44%,_#000_82%)] px-4 py-10 text-white">
       <div className="grain-overlay pointer-events-none absolute inset-0 opacity-30" />
@@ -286,20 +420,20 @@ export function CoreExperience({ initialKeyword }: CoreExperienceProps) {
         />
 
         <div className="flex min-h-8 items-center justify-center text-center text-xs uppercase tracking-[0.32em] text-zinc-500">
-          {isBusy ? "Generating aesthetic..." : "tumblr moodboard generator"}
+          {STATUS_LABELS[loadingStage]}
         </div>
 
         <PosterGrid
           key={poster ? `${poster.title}-${poster.queries.join("|")}` : "poster-placeholder"}
-          canShare={Boolean(poster) && !isBusy}
+          canShare={Boolean(poster) && hasResolvedImages && isPosterReady && !isFetchingPoster}
           copiedImage={copiedImage}
           isLoading={isBusy}
+          onProgressChange={handlePosterProgress}
           poster={poster}
           posterRef={posterRef}
           shareHref={buildShareUrl(pageUrl)}
           onCopyImage={handleCopyImage}
           onDownload={handleDownload}
-          onReadyChange={setIsPosterReady}
         />
 
         {error ? (
