@@ -1,0 +1,96 @@
+# PRD — lnkCore MVP
+
+## 1. Product Overview
+lnkCore is a web app that generates an "identity poster" from a keyword.
+
+Example inputs:
+- Korean Core
+- Berlin Core
+- Startup Core
+- Blonde Core
+
+The system generates:
+- a 9-image collage
+- a title
+- 5 aesthetic keywords
+
+The output is designed to be shareable as a meme or aesthetic poster.
+
+## 2. Core User Flow
+
+Landing page
+→ input keyword
+→ click generate
+→ system fetches images
+→ collage poster generated
+→ download / share
+
+## 3. Output Format
+
+Poster layout:
+
+Title (top)
+
+[3 x 3 image grid]
+
+Keywords (bottom)
+
+Example:
+
+KOREAN CORE
+
+[ collage ]
+
+ramen / neon / subway / rain / convenience
+
+## 4. Image Source
+
+Images are fetched dynamically from Unsplash API using keyword expansion.
+
+Example:
+
+Input:
+"Korean Core"
+
+Expanded search terms:
+
+korean street
+korean neon
+ramen
+soju
+convenience store
+subway
+rainy city
+apartment balcony
+night city
+
+## 5. Technical Stack
+
+Frontend
+- Next.js
+- React
+- Tailwind
+
+Backend
+- Next.js API routes
+
+Image Source
+- Unsplash API
+
+Hosting
+- Vercel
+
+## 6. Poster Generation Logic
+
+1. User enters keyword
+2. Expand keyword into 9 search terms
+3. Fetch images from Unsplash
+4. Render collage grid
+5. Display poster
+
+## 7. Future Features
+
+- random core generator
+- trending cores
+- poster history
+- AI aesthetic expansion
