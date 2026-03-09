@@ -126,11 +126,26 @@ export function PosterGrid({
             return (
               <div
                 key={imageKey}
-                className={`flex aspect-square items-center justify-center border border-zinc-800 bg-zinc-900 px-3 text-center text-[10px] uppercase tracking-[0.25em] text-zinc-500 ${
-                  isLoading ? "animate-pulse" : ""
+                className={`flex aspect-square items-center justify-center border border-zinc-800 px-3 text-center uppercase ${
+                  isLoading
+                    ? "animate-pulse bg-zinc-900 text-zinc-500"
+                    : "bg-[radial-gradient(circle_at_top,_rgba(63,63,70,0.28),_rgba(24,24,27,0.92)_58%,_rgba(9,9,11,1)_100%)] text-zinc-300"
                 }`}
               >
-                {poster ? fallbackLabel(image.query) : ""}
+                {poster ? (
+                  <div className="flex flex-col items-center gap-2">
+                    {!isLoading ? (
+                      <span className="text-[8px] tracking-[0.35em] text-zinc-600">
+                        CURATED
+                      </span>
+                    ) : null}
+                    <span className="text-[10px] tracking-[0.25em]">
+                      {fallbackLabel(image.query)}
+                    </span>
+                  </div>
+                ) : (
+                  ""
+                )}
               </div>
             );
           })}

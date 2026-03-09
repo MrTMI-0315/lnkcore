@@ -212,6 +212,16 @@ function buildFillerQueries(keyword: string) {
   );
 }
 
+function buildSlotFallbackChain(slotIndex: number, fillerQueries: string[]) {
+  const slotFallback = fillerQueries[slotIndex] ?? fillerQueries[slotIndex % fillerQueries.length];
+  const genericFallback =
+    GENERIC_FILLER_QUERIES[slotIndex % GENERIC_FILLER_QUERIES.length];
+
+  return [slotFallback, genericFallback].filter(
+    (value, index, list): value is string => Boolean(value) && list.indexOf(value) === index
+  );
+}
+
 async function resolveImages(
   queries: string[],
   log: GenerateLogger,
@@ -226,6 +236,7 @@ async function resolveImages(
 
       try {
         const url = await searchImage(query, {
+          fallbackQueries: buildSlotFallbackChain(index, fillerQueries),
           onEvent: (event) => {
             if (event.type === "fallback_query") {
               log("query_fallback_used", {
@@ -316,6 +327,11 @@ async function resolveImages(
       try {
         const url = await searchImage(fillerQuery, {
           excludeUrls: usedUrls,
+          fallbackQueries: [
+            queries[failedIndex],
+            ...buildSlotFallbackChain(failedIndex, fillerQueries),
+            GENERIC_FILLER_QUERIES[(offset + 1) % GENERIC_FILLER_QUERIES.length]
+          ],
           onEvent: (event) => {
             if (event.type === "fallback_query") {
               log("query_fallback_used", {
@@ -370,8 +386,14 @@ async function resolveImages(
   );
 
   let fillerUsedCount = 0;
+  let intentionalFillerCount = 0;
   for (const fillerResult of fillerResults) {
     if (!fillerResult.url || usedUrls.has(fillerResult.url)) {
+      images[fillerResult.failedIndex] = {
+        query: fillerResult.query,
+        url: null
+      };
+      intentionalFillerCount += 1;
       continue;
     }
 
@@ -388,13 +410,15 @@ async function resolveImages(
   log("image_resolution_completed", {
     duplicateFilteredCount,
     fillerUsedCount,
-    finalImageCount
+    finalImageCount,
+    intentionalFillerCount
   });
 
   return {
     duplicateFilteredCount,
     fillerUsedCount,
     finalImageCount,
+    intentionalFillerCount,
     images
   };
 }
@@ -532,7 +556,8 @@ export async function POST(request: Request) {
         core: keyword,
         duplicateFilteredCount: resolution.duplicateFilteredCount,
         fillerUsedCount: resolution.fillerUsedCount,
-        finalImageCount: resolution.finalImageCount
+        finalImageCount: resolution.finalImageCount,
+        intentionalFillerCount: resolution.intentionalFillerCount
       });
 
       return payload;

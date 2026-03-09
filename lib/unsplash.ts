@@ -91,6 +91,7 @@ type UnsplashCandidate = {
 
 type SearchImageOptions = {
   excludeUrls?: Set<string>;
+  fallbackQueries?: string[];
   onEvent?: (event: SearchImageEvent) => void;
 };
 
@@ -214,15 +215,19 @@ function extractSubjectQueries(query: string) {
   return dedupeUrls(phrases.filter((value): value is string => Boolean(value)));
 }
 
-function buildFallbackQueries(query: string) {
+function buildFallbackQueries(query: string, explicitFallbackQueries: string[] = []) {
   const normalizedQuery = query.trim().toLowerCase();
   const compactedQuery = compactQuery(normalizedQuery);
   const subjectQueries = extractSubjectQueries(normalizedQuery);
   const strippedQuery = normalizedQuery.replace(/\bcore\b/g, "").trim();
+  const normalizedExplicitFallbacks = explicitFallbackQueries.map((value) =>
+    value.trim().toLowerCase()
+  );
 
   return dedupeUrls(
     [
       normalizedQuery,
+      ...normalizedExplicitFallbacks,
       compactedQuery,
       strippedQuery,
       ...subjectQueries,
@@ -332,7 +337,7 @@ export async function searchImage(
   options: SearchImageOptions = {}
 ) {
   const normalizedQuery = query.trim().toLowerCase();
-  const fallbackQueries = buildFallbackQueries(query);
+  const fallbackQueries = buildFallbackQueries(query, options.fallbackQueries);
 
   for (const fallbackQuery of fallbackQueries) {
     if (fallbackQuery !== normalizedQuery) {
