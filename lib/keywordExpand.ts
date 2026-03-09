@@ -36,6 +36,11 @@ const MODIFIER_TRAILS = [
   ["moody", "night"],
   ["film", "aesthetic"]
 ];
+const LOCKED_CURATED_QUERY_CORES = new Set([
+  "berlin core",
+  "cafe core",
+  "startup core"
+]);
 
 const KEYWORD_STOP_WORDS = new Set([
   "aesthetic",
@@ -90,6 +95,10 @@ export function expandKeyword(keyword: string) {
   const curatedQueries = CORE_MAP[normalized];
 
   if (curatedQueries) {
+    if (LOCKED_CURATED_QUERY_CORES.has(normalized)) {
+      return curatedQueries;
+    }
+
     return curatedQueries.map((query, index) =>
       appendAestheticModifiers(query, index)
     );

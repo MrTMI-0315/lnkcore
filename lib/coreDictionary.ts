@@ -33,26 +33,26 @@ function createQueries(
 
 const MANUAL_CORE_QUERIES: Record<string, string[]> = {
   "berlin core": [
-    "berlin graffiti wall street photography",
-    "berlin brutalist architecture moody",
-    "berlin u bahn platform night",
-    "berlin concrete apartment blocks",
-    "berlin techno club lights",
-    "berlin bike street cinematic",
-    "berlin alley rain night",
-    "berlin cafe window moody",
-    "berlin street photography film"
+    "berlin graffiti street",
+    "berlin brutalist building",
+    "berlin train platform",
+    "berlin apartment facade",
+    "berlin club entrance",
+    "berlin bicycle street",
+    "berlin rainy street",
+    "berlin coffee shop window",
+    "berlin night traffic"
   ],
   "cafe core": [
-    "espresso cup aesthetic",
-    "latte art close up",
-    "cozy cafe interior moody",
-    "cafe window light film",
-    "pastry display aesthetic",
-    "barista coffee making cinematic",
-    "ceramic mug table moody",
-    "wood cafe table details",
-    "night cafe window street photography"
+    "coffee cup",
+    "latte art",
+    "coffee shop interior",
+    "cafe window",
+    "pastry display bakery",
+    "barista coffee",
+    "ceramic mug",
+    "wooden cafe table",
+    "coffee shop storefront night"
   ],
   "korean core": [
     "seoul alley night rain",
@@ -77,15 +77,15 @@ const MANUAL_CORE_QUERIES: Record<string, string[]> = {
     "film portrait melancholy"
   ],
   "startup core": [
-    "startup office desk aesthetic",
-    "founder laptop coffee table",
-    "pitch deck screen meeting room",
-    "coworking space moody",
-    "late office monitor glow",
-    "whiteboard product planning",
-    "notebook keyboard desk details",
-    "glass meeting room night",
-    "coding laptop cafe cinematic"
+    "office desk workspace",
+    "laptop coffee table workspace",
+    "presentation screen meeting room",
+    "coworking space desk",
+    "office monitor glow",
+    "whiteboard planning meeting",
+    "keyboard laptop desk",
+    "glass office meeting room",
+    "code editor laptop"
   ]
 };
 

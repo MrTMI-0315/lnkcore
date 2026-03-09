@@ -52,6 +52,76 @@ const KOREAN_POSITIVE_CONTEXT_TERMS = [
   "transit",
   "urban"
 ];
+const CORE_NEGATIVE_TERMS = [
+  "abstract",
+  "child",
+  "children",
+  "face closeup",
+  "moon closeup",
+  "portrait",
+  "studio portrait",
+  "wallpaper"
+];
+const CORE_SELECTION_RULES = [
+  {
+    negativeTerms: CORE_NEGATIVE_TERMS,
+    positiveTerms: [
+      "architecture",
+      "bike",
+      "building",
+      "cafe",
+      "club",
+      "concrete",
+      "graffiti",
+      "platform",
+      "street",
+      "subway",
+      "train",
+      "u bahn",
+      "urban"
+    ],
+    queryPattern: /\bberlin\b/
+  },
+  {
+    negativeTerms: CORE_NEGATIVE_TERMS,
+    positiveTerms: [
+      "barista",
+      "cafe",
+      "ceramic",
+      "coffee",
+      "croissant",
+      "cup",
+      "espresso",
+      "interior",
+      "latte",
+      "mug",
+      "pastry",
+      "storefront",
+      "table",
+      "window"
+    ],
+    queryPattern: /\bcafe\b/
+  },
+  {
+    negativeTerms: CORE_NEGATIVE_TERMS,
+    positiveTerms: [
+      "coffee",
+      "coworking",
+      "desk",
+      "keyboard",
+      "laptop",
+      "meeting",
+      "monitor",
+      "office",
+      "pitch",
+      "presentation",
+      "screen",
+      "whiteboard",
+      "workspace"
+    ],
+    queryPattern: /\b(startup|founder|coworking|workspace|office)\b/
+  }
+] as const;
 
 const imageCache = new Map<
   string,
@@ -132,7 +202,7 @@ function dedupeCandidates(candidates: UnsplashCandidate[]) {
   );
 }
 
-function includesAnyTerm(value: string, terms: string[]) {
+function includesAnyTerm(value: string, terms: readonly string[]) {
   return terms.some((term) => value.includes(term));
 }
 
@@ -160,6 +230,29 @@ function isWeakKoreanCandidate(query: string, candidate: UnsplashCandidate) {
   return hasNegativeTerm && !hasPositiveContext;
 }
 
+function isWeakCoreCandidate(query: string, candidate: UnsplashCandidate) {
+  const normalizedText = candidate.text.toLowerCase();
+
+  if (!normalizedText) {
+    return false;
+  }
+
+  for (const rule of CORE_SELECTION_RULES) {
+    if (!rule.queryPattern.test(query.toLowerCase())) {
+      continue;
+    }
+
+    const hasNegativeTerm = includesAnyTerm(normalizedText, rule.negativeTerms);
+    const hasPositiveContext = includesAnyTerm(normalizedText, rule.positiveTerms);
+
+    if (hasNegativeTerm && !hasPositiveContext) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function selectImageUrl(
   query: string,
   candidates: UnsplashCandidate[],
@@ -167,7 +260,9 @@ function selectImageUrl(
 ) {
   const filteredCandidates = candidates.filter(
     (candidate) =>
-      !excludeUrls?.has(candidate.url) && !isWeakKoreanCandidate(query, candidate)
+      !excludeUrls?.has(candidate.url) &&
+      !isWeakKoreanCandidate(query, candidate) &&
+      !isWeakCoreCandidate(query, candidate)
   );
   const availableCandidates =
     filteredCandidates.length > 0
@@ -357,10 +452,24 @@ export async function searchImage(
         });
       }
 
-      const candidateUrls = await fetchCandidateUrls(
-        fallbackQuery,
-        selectPage(fallbackQuery, attempt)
-      );
+      let candidateUrls: UnsplashCandidate[];
+
+      try {
+        candidateUrls = await fetchCandidateUrls(
+          fallbackQuery,
+          selectPage(fallbackQuery, attempt)
+        );
+      } catch (caughtError) {
+        if (
+          caughtError instanceof UnsplashError &&
+          (caughtError.status === 429 || caughtError.code === "missing_key")
+        ) {
+          throw caughtError;
+        }
+
+        continue;
+      }
+
       const selectedUrl = selectImageUrl(
         `${normalizedQuery}:${fallbackQuery}:${attempt}`,
         candidateUrls,

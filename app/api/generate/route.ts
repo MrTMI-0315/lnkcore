@@ -56,6 +56,50 @@ const FILLER_SCENES = [
   "cafe table"
 ];
 const SLOT_FILLER_QUERIES: Record<string, string[]> = {
+  berlin: [
+    "berlin graffiti street",
+    "berlin brutalist building",
+    "berlin train platform",
+    "berlin apartment facade",
+    "berlin club entrance",
+    "berlin coffee shop table",
+    "berlin bicycle street",
+    "berlin rainy street",
+    "berlin night traffic"
+  ],
+  "berlin core": [
+    "berlin graffiti street",
+    "berlin brutalist building",
+    "berlin train platform",
+    "berlin apartment facade",
+    "berlin club entrance",
+    "berlin coffee shop table",
+    "berlin bicycle street",
+    "berlin rainy street",
+    "berlin night traffic"
+  ],
+  cafe: [
+    "coffee cup",
+    "latte art",
+    "coffee shop interior",
+    "cafe window",
+    "pastry display bakery",
+    "barista coffee",
+    "ceramic mug",
+    "wooden cafe table",
+    "coffee shop storefront night"
+  ],
+  "cafe core": [
+    "coffee cup",
+    "latte art",
+    "coffee shop interior",
+    "cafe window",
+    "pastry display bakery",
+    "barista coffee",
+    "ceramic mug",
+    "wooden cafe table",
+    "coffee shop storefront night"
+  ],
   korean: [
     "seoul alley night rain",
     "minimal korean street fashion full body",
@@ -77,6 +121,28 @@ const SLOT_FILLER_QUERIES: Record<string, string[]> = {
     "minimal korean street fashion crosswalk",
     "rainy seoul side street",
     "seoul urban rain wide shot"
+  ],
+  startup: [
+    "office desk workspace",
+    "laptop coffee table workspace",
+    "presentation screen meeting room",
+    "coworking space desk",
+    "office monitor glow",
+    "whiteboard planning meeting",
+    "keyboard laptop desk",
+    "glass office meeting room",
+    "code editor laptop"
+  ],
+  "startup core": [
+    "office desk workspace",
+    "laptop coffee table workspace",
+    "presentation screen meeting room",
+    "coworking space desk",
+    "office monitor glow",
+    "whiteboard planning meeting",
+    "keyboard laptop desk",
+    "glass office meeting room",
+    "code editor laptop"
   ]
 };
 
