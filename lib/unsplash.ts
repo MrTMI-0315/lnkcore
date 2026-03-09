@@ -41,7 +41,20 @@ type UnsplashResponse = {
 
 type SearchImageOptions = {
   excludeUrls?: Set<string>;
+  onEvent?: (event: SearchImageEvent) => void;
 };
+
+type SearchImageEvent =
+  | {
+      type: "fallback_query";
+      fallbackQuery: string;
+      originalQuery: string;
+    }
+  | {
+      type: "retry";
+      attempt: number;
+      query: string;
+    };
 
 function randomPage() {
   return Math.floor(Math.random() * MAX_RANDOM_PAGE) + 1;
@@ -160,10 +173,27 @@ export async function searchImage(
   query: string,
   options: SearchImageOptions = {}
 ) {
+  const normalizedQuery = query.trim().toLowerCase();
   const fallbackQueries = buildFallbackQueries(query);
 
   for (const fallbackQuery of fallbackQueries) {
+    if (fallbackQuery !== normalizedQuery) {
+      options.onEvent?.({
+        type: "fallback_query",
+        fallbackQuery,
+        originalQuery: normalizedQuery
+      });
+    }
+
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
+      if (attempt > 0) {
+        options.onEvent?.({
+          type: "retry",
+          attempt,
+          query: fallbackQuery
+        });
+      }
+
       const candidateUrls = await fetchCandidateUrls(fallbackQuery, randomPage());
       const selectedUrl = selectImageUrl(candidateUrls, options.excludeUrls);
 

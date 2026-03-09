@@ -77,8 +77,8 @@ export function CoreExperience({ initialKeyword }: CoreExperienceProps) {
   const [isPosterReady, setIsPosterReady] = useState(false);
   const [hasResolvedImages, setHasResolvedImages] = useState(false);
   const [loadingStage, setLoadingStage] = useState<LoadingStage>("idle");
+  const [actionToast, setActionToast] = useState<string | null>(null);
   const [copiedImage, setCopiedImage] = useState(false);
-  const [savedToastVisible, setSavedToastVisible] = useState(false);
   const [pageUrl, setPageUrl] = useState("");
   const posterRef = useRef<HTMLDivElement>(null);
 
@@ -109,6 +109,7 @@ export function CoreExperience({ initialKeyword }: CoreExperienceProps) {
 
     setError(null);
     setCopiedImage(false);
+    setActionToast(null);
     setPoster(buildPlaceholderPoster(trimmedKeyword));
     setHasResolvedImages(false);
     setIsPosterReady(false);
@@ -209,25 +210,31 @@ export function CoreExperience({ initialKeyword }: CoreExperienceProps) {
 
   const handleDownload = useCallback(async () => {
     if (!posterRef.current) {
+      setActionToast("Poster is still loading.");
       return;
     }
 
-    const canvas = await html2canvas(posterRef.current, {
-      backgroundColor: "#050505",
-      scale: 2,
-      useCORS: true,
-      logging: false
-    });
+    try {
+      const canvas = await html2canvas(posterRef.current, {
+        backgroundColor: "#050505",
+        scale: 2,
+        useCORS: true,
+        logging: false
+      });
 
-    const link = document.createElement("a");
-    link.download = "core-poster.png";
-    link.href = canvas.toDataURL("image/png");
-    link.click();
-    setSavedToastVisible(true);
+      const link = document.createElement("a");
+      link.download = "core-poster.png";
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+      setActionToast("Saved aesthetic poster.");
+    } catch {
+      setActionToast("Unable to save poster. Try again.");
+    }
   }, []);
 
   const handleCopyImage = useCallback(async () => {
     if (!posterRef.current || typeof window === "undefined") {
+      setActionToast("Poster is still loading.");
       return;
     }
 
@@ -253,10 +260,32 @@ export function CoreExperience({ initialKeyword }: CoreExperienceProps) {
         })
       ]);
       setCopiedImage(true);
+      setActionToast("Copied poster image.");
     } catch {
-      setError("Copy image is unavailable on this browser. Download the poster instead.");
+      setActionToast("Copy image is unavailable on this browser. Download the poster instead.");
     }
   }, []);
+
+  const handleShare = useCallback(() => {
+    if (typeof window === "undefined" || !pageUrl) {
+      setActionToast("Share link is not ready yet.");
+      return;
+    }
+
+    try {
+      const shareWindow = window.open(
+        buildShareUrl(pageUrl),
+        "_blank",
+        "noopener,noreferrer"
+      );
+
+      if (!shareWindow) {
+        throw new Error("share_window_blocked");
+      }
+    } catch {
+      setActionToast("Unable to open share window. Allow pop-ups and try again.");
+    }
+  }, [pageUrl]);
 
   const handleRetry = useCallback(() => {
     const targetKeyword = keyword.trim() || initialKeyword?.trim();
@@ -334,18 +363,18 @@ export function CoreExperience({ initialKeyword }: CoreExperienceProps) {
   }, [copiedImage]);
 
   useEffect(() => {
-    if (!savedToastVisible) {
+    if (!actionToast) {
       return;
     }
 
     const timeoutId = window.setTimeout(() => {
-      setSavedToastVisible(false);
+      setActionToast(null);
     }, 1800);
 
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [savedToastVisible]);
+  }, [actionToast]);
 
   useEffect(() => {
     if (popularCoresPreloaded || typeof window === "undefined") {
@@ -431,9 +460,9 @@ export function CoreExperience({ initialKeyword }: CoreExperienceProps) {
           onProgressChange={handlePosterProgress}
           poster={poster}
           posterRef={posterRef}
-          shareHref={buildShareUrl(pageUrl)}
           onCopyImage={handleCopyImage}
           onDownload={handleDownload}
+          onShare={handleShare}
         />
 
         {error ? (
@@ -454,12 +483,12 @@ export function CoreExperience({ initialKeyword }: CoreExperienceProps) {
 
       <div
         className={`pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full border border-zinc-700 bg-zinc-950/95 px-4 py-2 text-xs uppercase tracking-[0.25em] text-zinc-100 shadow-[0_12px_30px_rgba(0,0,0,0.45)] transition-all duration-300 ${
-          savedToastVisible
+          actionToast
             ? "translate-y-0 opacity-100"
             : "translate-y-3 opacity-0"
         }`}
       >
-        Saved aesthetic poster.
+        {actionToast ?? ""}
       </div>
     </main>
   );

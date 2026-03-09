@@ -21,9 +21,9 @@ type PosterGridProps = {
   onProgressChange: (loaded: number, total: number) => void;
   poster: PosterPayload | null;
   posterRef: RefObject<HTMLDivElement | null>;
-  shareHref: string;
   onCopyImage: () => void;
   onDownload: () => void;
+  onShare: () => void;
 };
 
 function fallbackLabel(query: string) {
@@ -48,9 +48,9 @@ export function PosterGrid({
   onProgressChange,
   poster,
   posterRef,
-  shareHref,
   onCopyImage,
-  onDownload
+  onDownload,
+  onShare
 }: PosterGridProps) {
   const [loadedImages, setLoadedImages] = useState<Record<string, true>>({});
   const totalImages = useMemo(
@@ -158,19 +158,19 @@ export function PosterGrid({
         >
           {copiedImage ? "Image Copied" : "Copy Image"}
         </button>
-        <a
+        <button
           aria-disabled={!canShare}
           className={`w-full rounded-full border px-5 py-2 text-center text-sm font-medium transition sm:w-auto ${
             canShare
               ? "border-zinc-700 text-zinc-100 hover:border-zinc-500 hover:bg-zinc-800"
               : "pointer-events-none border-zinc-800 text-zinc-500"
           }`}
-          href={shareHref}
-          rel="noreferrer"
-          target="_blank"
+          disabled={!canShare}
+          type="button"
+          onClick={onShare}
         >
           Share on X
-        </a>
+        </button>
       </div>
     </section>
   );

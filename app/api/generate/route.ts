@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { NextResponse } from "next/server";
 
 import { expandKeyword, extractPosterKeywords, formatPosterTitle } from "@/lib/keywordExpand";
@@ -46,6 +48,31 @@ const GENERIC_FILLER_QUERIES = [
   "neon city rain"
 ];
 
+type PosterPayload = {
+  title: string;
+  queries: string[];
+  keywords: string[];
+  images: Array<{
+    query: string;
+    url: string | null;
+  }>;
+};
+
+type GenerateLogger = (event: string, details?: Record<string, unknown>) => void;
+
+function createLogger(requestId: string): GenerateLogger {
+  return (event, details = {}) => {
+    console.info(
+      JSON.stringify({
+        event,
+        requestId,
+        scope: "poster_generate",
+        ...details
+      })
+    );
+  };
+}
+
 function getClientId(request: Request) {
   const forwardedFor = request.headers.get("x-forwarded-for");
   const realIp = request.headers.get("x-real-ip");
@@ -87,19 +114,39 @@ function enforceRateLimit(clientId: string) {
   };
 }
 
-function errorResponse(message: string, status: number, retryAfterSeconds?: number) {
+function jsonResponse(
+  payload: PosterPayload,
+  requestId: string,
+  headers?: Record<string, string>
+) {
+  return NextResponse.json(payload, {
+    headers: {
+      "x-request-id": requestId,
+      ...headers
+    }
+  });
+}
+
+function errorResponseWithRequestId(
+  message: string,
+  status: number,
+  requestId: string,
+  retryAfterSeconds?: number
+) {
   return NextResponse.json(
     {
       error: message
     },
     {
       status,
-      headers:
-        retryAfterSeconds !== undefined
+      headers: {
+        "x-request-id": requestId,
+        ...(retryAfterSeconds !== undefined
           ? {
               "Retry-After": String(retryAfterSeconds)
             }
-          : undefined
+          : {})
+      }
     }
   );
 }
@@ -114,13 +161,43 @@ function getFallbackKeyword(keyword: string) {
   return fallback.length > 0 ? fallback : null;
 }
 
-async function resolveImages(queries: string[]) {
+async function resolveImages(queries: string[], log: GenerateLogger) {
   const initialImages = await Promise.all(
-    queries.map(async (query) => {
+    queries.map(async (query, index) => {
+      log("cell_fetch_started", {
+        cell: index + 1,
+        query
+      });
+
       try {
+        const url = await searchImage(query, {
+          onEvent: (event) => {
+            if (event.type === "fallback_query") {
+              log("query_fallback_used", {
+                cell: index + 1,
+                fallbackQuery: event.fallbackQuery,
+                originalQuery: event.originalQuery
+              });
+            }
+
+            if (event.type === "retry") {
+              log("query_retry", {
+                attempt: event.attempt,
+                cell: index + 1,
+                query: event.query
+              });
+            }
+          }
+        });
+
+        log(url ? "cell_fetch_succeeded" : "cell_fetch_failed", {
+          cell: index + 1,
+          query
+        });
+
         return {
           query,
-          url: await searchImage(query)
+          url
         };
       } catch (caughtError) {
         if (
@@ -129,6 +206,13 @@ async function resolveImages(queries: string[]) {
         ) {
           throw caughtError;
         }
+
+        log("cell_fetch_failed", {
+          cell: index + 1,
+          error:
+            caughtError instanceof Error ? caughtError.message : "unknown_error",
+          query
+        });
 
         return {
           query,
@@ -139,8 +223,13 @@ async function resolveImages(queries: string[]) {
   );
 
   const usedUrls = new Set<string>();
+  let duplicateFilteredCount = 0;
   const images = initialImages.map((image) => {
     if (!image.url || usedUrls.has(image.url)) {
+      if (image.url) {
+        duplicateFilteredCount += 1;
+      }
+
       return {
         ...image,
         url: null
@@ -149,6 +238,10 @@ async function resolveImages(queries: string[]) {
 
     usedUrls.add(image.url);
     return image;
+  });
+
+  log("duplicate_filter_applied", {
+    duplicateFilteredCount
   });
 
   const failedIndexes = images
@@ -160,11 +253,42 @@ async function resolveImages(queries: string[]) {
       const fillerQuery =
         GENERIC_FILLER_QUERIES[offset % GENERIC_FILLER_QUERIES.length];
 
+      log("filler_fetch_started", {
+        cell: failedIndex + 1,
+        fillerQuery
+      });
+
       try {
+        const url = await searchImage(fillerQuery, {
+          excludeUrls: usedUrls,
+          onEvent: (event) => {
+            if (event.type === "fallback_query") {
+              log("query_fallback_used", {
+                cell: failedIndex + 1,
+                fallbackQuery: event.fallbackQuery,
+                originalQuery: event.originalQuery
+              });
+            }
+
+            if (event.type === "retry") {
+              log("query_retry", {
+                attempt: event.attempt,
+                cell: failedIndex + 1,
+                query: event.query
+              });
+            }
+          }
+        });
+
+        log(url ? "filler_fetch_succeeded" : "filler_fetch_failed", {
+          cell: failedIndex + 1,
+          fillerQuery
+        });
+
         return {
           failedIndex,
           query: fillerQuery,
-          url: await searchImage(fillerQuery)
+          url
         };
       } catch (caughtError) {
         if (
@@ -173,6 +297,13 @@ async function resolveImages(queries: string[]) {
         ) {
           throw caughtError;
         }
+
+        log("filler_fetch_failed", {
+          cell: failedIndex + 1,
+          error:
+            caughtError instanceof Error ? caughtError.message : "unknown_error",
+          fillerQuery
+        });
 
         return {
           failedIndex,
@@ -183,6 +314,7 @@ async function resolveImages(queries: string[]) {
     })
   );
 
+  let fillerUsedCount = 0;
   for (const fillerResult of fillerResults) {
     if (!fillerResult.url || usedUrls.has(fillerResult.url)) {
       continue;
@@ -193,19 +325,45 @@ async function resolveImages(queries: string[]) {
       query: fillerResult.query,
       url: fillerResult.url
     };
+    fillerUsedCount += 1;
   }
 
-  return images;
+  const finalImageCount = images.filter((image) => Boolean(image.url)).length;
+
+  log("image_resolution_completed", {
+    duplicateFilteredCount,
+    fillerUsedCount,
+    finalImageCount
+  });
+
+  return {
+    duplicateFilteredCount,
+    fillerUsedCount,
+    finalImageCount,
+    images
+  };
 }
 
 export async function POST(request: Request) {
+  const requestId = randomUUID();
+  const startedAt = Date.now();
+  const log = createLogger(requestId);
+  let requestedKeyword = "unknown";
+
   try {
+    log("request_started");
     const rateLimit = enforceRateLimit(getClientId(request));
 
     if (rateLimit.limited) {
-      return errorResponse(
+      log("request_rate_limited", {
+        latencyMs: Date.now() - startedAt,
+        retryAfterSeconds: rateLimit.retryAfterSeconds
+      });
+
+      return errorResponseWithRequestId(
         "Too many poster requests. Try again in a minute.",
         429,
+        requestId,
         rateLimit.retryAfterSeconds
       );
     }
@@ -217,27 +375,63 @@ export async function POST(request: Request) {
     const keyword = body.keyword?.trim();
 
     if (!keyword || keyword.length > 80) {
-      return errorResponse("Enter a keyword between 1 and 80 characters.", 400);
+      log("request_invalid", {
+        keywordLength: keyword?.length ?? 0,
+        latencyMs: Date.now() - startedAt
+      });
+
+      return errorResponseWithRequestId(
+        "Enter a keyword between 1 and 80 characters.",
+        400,
+        requestId
+      );
     }
 
+    requestedKeyword = keyword;
     const normalizedKeyword = normalizeKeyword(keyword);
+    log("request_validated", {
+      core: keyword
+    });
+
     const now = Date.now();
     const cachedPoster = posterCache.get(normalizedKeyword);
 
     if (cachedPoster && cachedPoster.expiresAt > now) {
-      return NextResponse.json(cachedPoster.payload);
+      log("poster_cache_hit", {
+        core: keyword,
+        finalImageCount: cachedPoster.payload.images.filter((image) => Boolean(image.url)).length,
+        latencyMs: Date.now() - startedAt
+      });
+
+      return jsonResponse(cachedPoster.payload, requestId);
     }
 
     const inFlight = inFlightRequests.get(normalizedKeyword);
 
     if (inFlight) {
-      return NextResponse.json(await inFlight);
+      log("poster_inflight_reused", {
+        core: keyword
+      });
+
+      const payload = await inFlight;
+      log("request_completed", {
+        core: keyword,
+        finalImageCount: payload.images.filter((image) => Boolean(image.url)).length,
+        latencyMs: Date.now() - startedAt
+      });
+
+      return jsonResponse(payload, requestId);
     }
 
     const payloadPromise = (async () => {
       let effectiveKeyword = keyword;
       let queries = expandKeyword(keyword);
-      let images = await resolveImages(queries);
+      log("queries_expanded", {
+        core: keyword,
+        expandedQueries: queries
+      });
+      let resolution = await resolveImages(queries, log);
+      let images = resolution.images;
 
       if (images.every((image) => !image.url)) {
         const fallbackKeyword = getFallbackKeyword(keyword);
@@ -245,7 +439,16 @@ export async function POST(request: Request) {
         if (fallbackKeyword && normalizeKeyword(fallbackKeyword) !== normalizedKeyword) {
           effectiveKeyword = fallbackKeyword;
           queries = expandKeyword(fallbackKeyword);
-          images = await resolveImages(queries);
+          log("keyword_fallback_used", {
+            fallbackKeyword,
+            originalKeyword: keyword
+          });
+          log("queries_expanded", {
+            core: fallbackKeyword,
+            expandedQueries: queries
+          });
+          resolution = await resolveImages(queries, log);
+          images = resolution.images;
         }
       }
 
@@ -268,35 +471,83 @@ export async function POST(request: Request) {
         payload
       });
 
+      log("poster_cached", {
+        core: keyword,
+        duplicateFilteredCount: resolution.duplicateFilteredCount,
+        fillerUsedCount: resolution.fillerUsedCount,
+        finalImageCount: resolution.finalImageCount
+      });
+
       return payload;
     })();
 
     inFlightRequests.set(normalizedKeyword, payloadPromise);
 
     try {
-      return NextResponse.json(await payloadPromise);
+      const payload = await payloadPromise;
+      log("request_completed", {
+        core: keyword,
+        finalImageCount: payload.images.filter((image) => Boolean(image.url)).length,
+        latencyMs: Date.now() - startedAt
+      });
+
+      return jsonResponse(payload, requestId);
     } finally {
       inFlightRequests.delete(normalizedKeyword);
     }
   } catch (caughtError) {
     if (caughtError instanceof UnsplashError) {
       if (caughtError.code === "no_results") {
-        return errorResponse(caughtError.message, 404);
+        log("request_failed", {
+          code: caughtError.code,
+          core: requestedKeyword,
+          latencyMs: Date.now() - startedAt,
+          status: 404
+        });
+        return errorResponseWithRequestId(caughtError.message, 404, requestId);
       }
 
       if (caughtError.code === "missing_key") {
-        return errorResponse("Image source is not configured on the server.", 503);
+        log("request_failed", {
+          code: caughtError.code,
+          core: requestedKeyword,
+          latencyMs: Date.now() - startedAt,
+          status: 503
+        });
+        return errorResponseWithRequestId(
+          "Image source is not configured on the server.",
+          503,
+          requestId
+        );
       }
 
       if (caughtError.status === 429) {
-        return errorResponse(
+        log("request_failed", {
+          code: caughtError.code,
+          core: requestedKeyword,
+          latencyMs: Date.now() - startedAt,
+          status: 429
+        });
+        return errorResponseWithRequestId(
           "Image search is temporarily rate limited. Try again shortly.",
           429,
+          requestId,
           60
         );
       }
 
-      return errorResponse("Image search failed while building this poster.", caughtError.status);
+      log("request_failed", {
+        code: caughtError.code,
+        core: requestedKeyword,
+        latencyMs: Date.now() - startedAt,
+        status: caughtError.status
+      });
+
+      return errorResponseWithRequestId(
+        "Image search failed while building this poster.",
+        caughtError.status,
+        requestId
+      );
     }
 
     const message =
@@ -304,6 +555,13 @@ export async function POST(request: Request) {
         ? caughtError.message
         : "Unable to generate poster.";
 
-    return errorResponse(message, 500);
+    log("request_failed", {
+      error: message,
+      core: requestedKeyword,
+      latencyMs: Date.now() - startedAt,
+      status: 500
+    });
+
+    return errorResponseWithRequestId(message, 500, requestId);
   }
 }
