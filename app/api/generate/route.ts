@@ -47,6 +47,14 @@ const GENERIC_FILLER_QUERIES = [
   "cinematic cafe night",
   "neon city rain"
 ];
+const FILLER_SCENES = [
+  "street night",
+  "interior aesthetic",
+  "details film",
+  "window light",
+  "city rain",
+  "cafe table"
+];
 
 type PosterPayload = {
   title: string;
@@ -161,7 +169,23 @@ function getFallbackKeyword(keyword: string) {
   return fallback.length > 0 ? fallback : null;
 }
 
-async function resolveImages(queries: string[], log: GenerateLogger) {
+function buildFillerQueries(keyword: string) {
+  const base = getFallbackKeyword(keyword)?.toLowerCase() ?? keyword.trim().toLowerCase();
+
+  if (!base) {
+    return GENERIC_FILLER_QUERIES;
+  }
+
+  return FILLER_SCENES.map((scene, index) =>
+    index < GENERIC_FILLER_QUERIES.length ? `${base} ${scene}` : GENERIC_FILLER_QUERIES[index]
+  );
+}
+
+async function resolveImages(
+  queries: string[],
+  log: GenerateLogger,
+  fillerQueries: string[]
+) {
   const initialImages = await Promise.all(
     queries.map(async (query, index) => {
       log("cell_fetch_started", {
@@ -250,8 +274,7 @@ async function resolveImages(queries: string[], log: GenerateLogger) {
 
   const fillerResults = await Promise.all(
     failedIndexes.map(async (failedIndex, offset) => {
-      const fillerQuery =
-        GENERIC_FILLER_QUERIES[offset % GENERIC_FILLER_QUERIES.length];
+      const fillerQuery = fillerQueries[offset % fillerQueries.length];
 
       log("filler_fetch_started", {
         cell: failedIndex + 1,
@@ -426,11 +449,12 @@ export async function POST(request: Request) {
     const payloadPromise = (async () => {
       let effectiveKeyword = keyword;
       let queries = expandKeyword(keyword);
+      let fillerQueries = buildFillerQueries(keyword);
       log("queries_expanded", {
         core: keyword,
         expandedQueries: queries
       });
-      let resolution = await resolveImages(queries, log);
+      let resolution = await resolveImages(queries, log, fillerQueries);
       let images = resolution.images;
 
       if (images.every((image) => !image.url)) {
@@ -439,6 +463,7 @@ export async function POST(request: Request) {
         if (fallbackKeyword && normalizeKeyword(fallbackKeyword) !== normalizedKeyword) {
           effectiveKeyword = fallbackKeyword;
           queries = expandKeyword(fallbackKeyword);
+          fillerQueries = buildFillerQueries(fallbackKeyword);
           log("keyword_fallback_used", {
             fallbackKeyword,
             originalKeyword: keyword
@@ -447,7 +472,7 @@ export async function POST(request: Request) {
             core: fallbackKeyword,
             expandedQueries: queries
           });
-          resolution = await resolveImages(queries, log);
+          resolution = await resolveImages(queries, log, fillerQueries);
           images = resolution.images;
         }
       }

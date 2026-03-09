@@ -31,6 +31,64 @@ function createQueries(
   ];
 }
 
+const MANUAL_CORE_QUERIES: Record<string, string[]> = {
+  "berlin core": [
+    "berlin graffiti wall street photography",
+    "berlin brutalist architecture moody",
+    "berlin u bahn platform night",
+    "berlin concrete apartment blocks",
+    "berlin techno club lights",
+    "berlin bike street cinematic",
+    "berlin alley rain night",
+    "berlin cafe window moody",
+    "berlin street photography film"
+  ],
+  "cafe core": [
+    "espresso cup aesthetic",
+    "latte art close up",
+    "cozy cafe interior moody",
+    "cafe window light film",
+    "pastry display aesthetic",
+    "barista coffee making cinematic",
+    "ceramic mug table moody",
+    "wood cafe table details",
+    "night cafe window street photography"
+  ],
+  "korean core": [
+    "seoul street night cinematic",
+    "korean convenience store night",
+    "korean subway interior",
+    "seoul apartment buildings moody",
+    "ramen bowl korean aesthetic",
+    "soju bottle table film",
+    "rainy alley korea night",
+    "seoul cafe window moody",
+    "neon street korea"
+  ],
+  "sad indie core": [
+    "rainy window moody film",
+    "cassette player close up",
+    "messy notebook desk aesthetic",
+    "night bus window rain",
+    "dim bedroom lamp moody",
+    "vinyl player cinematic",
+    "coffee cup rainy cafe",
+    "empty train seat night",
+    "film portrait melancholy"
+  ],
+  "startup core": [
+    "startup office desk aesthetic",
+    "founder laptop coffee table",
+    "pitch deck screen meeting room",
+    "coworking space moody",
+    "late office monitor glow",
+    "whiteboard product planning",
+    "notebook keyboard desk details",
+    "glass meeting room night",
+    "coding laptop cafe cinematic"
+  ]
+};
+
 const CITY_CORE_DEFINITIONS: CoreTuple[] = [
   ["tokyo core", "tokyo", "neon alley", "train platform", "ramen counter", "skyline"],
   ["seoul core", "seoul", "convenience store", "subway interior", "rainy alley", "apartment skyline"],
@@ -258,9 +316,12 @@ if (CORE_DEFINITIONS.length !== 200) {
   throw new Error(`Expected 200 core definitions, got ${CORE_DEFINITIONS.length}.`);
 }
 
-export const CORE_MAP: Record<string, string[]> = Object.fromEntries(
-  CORE_DEFINITIONS.map(([name, subject, focusA, focusB, focusC, focusD]) => [
-    name,
-    createQueries(subject, focusA, focusB, focusC, focusD)
-  ])
-);
+export const CORE_MAP: Record<string, string[]> = {
+  ...Object.fromEntries(
+    CORE_DEFINITIONS.map(([name, subject, focusA, focusB, focusC, focusD]) => [
+      name,
+      createQueries(subject, focusA, focusB, focusC, focusD)
+    ])
+  ),
+  ...MANUAL_CORE_QUERIES
+};

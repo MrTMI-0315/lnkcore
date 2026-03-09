@@ -5,10 +5,19 @@ const MAX_RETRIES = 2;
 const RESULTS_PER_PAGE = 5;
 const GENERIC_FALLBACK_QUERIES = [
   "city night aesthetic",
-  "street photography film",
-  "urban lights night",
-  "cinematic interior aesthetic"
+  "rainy window moody",
+  "cozy interior film",
+  "street photography night"
 ];
+const STYLE_STOP_WORDS = new Set([
+  "aesthetic",
+  "cinematic",
+  "film",
+  "moody",
+  "night",
+  "photography",
+  "street"
+]);
 
 const imageCache = new Map<
   string,
@@ -56,31 +65,83 @@ type SearchImageEvent =
       query: string;
     };
 
-function randomPage() {
-  return Math.floor(Math.random() * MAX_RANDOM_PAGE) + 1;
+function hashString(value: string) {
+  let hash = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+
+  return hash;
+}
+
+function selectPage(query: string, attempt: number) {
+  return (hashString(`${query}:${attempt}`) % MAX_RANDOM_PAGE) + 1;
 }
 
 function dedupeUrls(urls: string[]) {
   return urls.filter((url, index, list) => list.indexOf(url) === index);
 }
 
-function selectImageUrl(urls: string[], excludeUrls?: Set<string>) {
-  return urls.find((url) => !excludeUrls?.has(url)) ?? null;
+function selectImageUrl(
+  query: string,
+  urls: string[],
+  excludeUrls?: Set<string>
+) {
+  const availableUrls = urls.filter((url) => !excludeUrls?.has(url));
+
+  if (availableUrls.length === 0) {
+    return null;
+  }
+
+  const candidatePool = availableUrls.slice(0, Math.min(3, availableUrls.length));
+  const selectedIndex = hashString(query) % candidatePool.length;
+
+  return candidatePool[selectedIndex] ?? candidatePool[0] ?? null;
+}
+
+function compactQuery(query: string) {
+  return query
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter((word) => !STYLE_STOP_WORDS.has(word))
+    .join(" ");
+}
+
+function extractSubjectQueries(query: string) {
+  const compacted = compactQuery(query);
+  const words = compacted.split(/\s+/).filter(Boolean);
+
+  if (words.length === 0) {
+    return [];
+  }
+
+  const phrases = [
+    words.slice(0, Math.min(3, words.length)).join(" "),
+    words.slice(0, Math.min(2, words.length)).join(" "),
+    words.slice(-2).join(" "),
+    words.at(-1)
+  ];
+
+  return dedupeUrls(phrases.filter((value): value is string => Boolean(value)));
 }
 
 function buildFallbackQueries(query: string) {
   const normalizedQuery = query.trim().toLowerCase();
-  const words = normalizedQuery.split(/\s+/).filter(Boolean);
-  const lastWord = words.at(-1);
+  const compactedQuery = compactQuery(normalizedQuery);
+  const subjectQueries = extractSubjectQueries(normalizedQuery);
   const strippedQuery = normalizedQuery.replace(/\bcore\b/g, "").trim();
 
   return dedupeUrls(
     [
       normalizedQuery,
+      compactedQuery,
       strippedQuery,
-      lastWord,
-      lastWord ? `${lastWord} aesthetic` : null,
-      lastWord ? `${lastWord} night` : null,
+      ...subjectQueries,
+      subjectQueries[0] ? `${subjectQueries[0]} aesthetic` : null,
+      subjectQueries[0] ? `${subjectQueries[0]} night` : null,
       ...GENERIC_FALLBACK_QUERIES
     ].filter((value): value is string => Boolean(value))
   );
@@ -194,8 +255,15 @@ export async function searchImage(
         });
       }
 
-      const candidateUrls = await fetchCandidateUrls(fallbackQuery, randomPage());
-      const selectedUrl = selectImageUrl(candidateUrls, options.excludeUrls);
+      const candidateUrls = await fetchCandidateUrls(
+        fallbackQuery,
+        selectPage(fallbackQuery, attempt)
+      );
+      const selectedUrl = selectImageUrl(
+        `${normalizedQuery}:${fallbackQuery}:${attempt}`,
+        candidateUrls,
+        options.excludeUrls
+      );
 
       if (selectedUrl) {
         return selectedUrl;
