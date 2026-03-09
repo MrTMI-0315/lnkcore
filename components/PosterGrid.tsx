@@ -84,9 +84,9 @@ export function PosterGrid({
     <section className="mx-auto flex w-full max-w-xl flex-col items-center gap-4">
       <div
         ref={posterRef}
-        className="w-[90vw] max-w-xl rounded-3xl border border-zinc-800 bg-black/75 p-4 shadow-2xl backdrop-blur-sm sm:p-5"
+        className="w-[90vw] max-w-xl rounded-3xl border border-zinc-800 bg-zinc-950 p-4 shadow-2xl shadow-[0_0_40px_rgba(0,0,0,0.6)] transition-shadow duration-300 hover:shadow-[0_0_56px_rgba(0,0,0,0.72)] sm:p-5"
       >
-        <h2 className="mb-4 text-center text-lg font-semibold uppercase tracking-[0.25em] text-zinc-100">
+        <h2 className="mb-4 text-center text-xl font-semibold uppercase tracking-[0.35em] text-zinc-100">
           {poster?.title ?? "AESTHETIC IDENTITY"}
         </h2>
 
@@ -95,13 +95,13 @@ export function PosterGrid({
             image.url ? (
               <div
                 key={`${image.query}-${index}`}
-                className={`relative aspect-square overflow-hidden bg-zinc-950 transition-opacity duration-700 ${
+                className={`group relative aspect-square overflow-hidden bg-zinc-950 transition-opacity duration-700 ${
                   isLoading || !isReady ? "opacity-0" : "opacity-100"
                 }`}
               >
                 <Image
                   alt={image.query}
-                  className="object-cover"
+                  className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
                   fill
                   onLoad={() => {
                     handleImageLoad(`${image.query}-${index}`);
@@ -113,17 +113,17 @@ export function PosterGrid({
             ) : (
               <div
                 key={`${image.query}-${index}`}
-                className={`flex aspect-square items-center justify-center bg-zinc-900 px-3 text-center text-[10px] uppercase tracking-[0.25em] text-zinc-500 ${
+                className={`flex aspect-square items-center justify-center border border-zinc-800 bg-zinc-900 px-3 text-center text-[10px] uppercase tracking-[0.25em] text-zinc-500 ${
                   isLoading ? "animate-pulse" : ""
                 }`}
               >
-                {poster ? fallbackLabel(image.query) : "□"}
+                {poster ? fallbackLabel(image.query) : ""}
               </div>
             )
           )}
         </div>
 
-        <p className="mt-4 text-center text-xs uppercase tracking-wide text-zinc-400 opacity-70">
+        <p className="mt-2 text-center text-xs uppercase tracking-wide text-zinc-400 opacity-60">
           {(poster?.keywords ?? PLACEHOLDER_KEYWORDS).join(" • ")}
         </p>
       </div>

@@ -42,6 +42,7 @@ export function CoreExperience({ initialKeyword }: CoreExperienceProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPosterReady, setIsPosterReady] = useState(false);
   const [copiedImage, setCopiedImage] = useState(false);
+  const [savedToastVisible, setSavedToastVisible] = useState(false);
   const [pageUrl, setPageUrl] = useState("");
   const posterRef = useRef<HTMLDivElement>(null);
 
@@ -163,6 +164,7 @@ export function CoreExperience({ initialKeyword }: CoreExperienceProps) {
     link.download = "core-poster.png";
     link.href = canvas.toDataURL("image/png");
     link.click();
+    setSavedToastVisible(true);
   }, []);
 
   const handleCopyImage = useCallback(async () => {
@@ -240,6 +242,20 @@ export function CoreExperience({ initialKeyword }: CoreExperienceProps) {
     };
   }, [copiedImage]);
 
+  useEffect(() => {
+    if (!savedToastVisible) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setSavedToastVisible(false);
+    }, 1800);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [savedToastVisible]);
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(24,24,27,0.96),_rgba(0,0,0,0.98)_44%,_#000_82%)] px-4 py-10 text-white">
       <div className="grain-overlay pointer-events-none absolute inset-0 opacity-30" />
@@ -300,6 +316,16 @@ export function CoreExperience({ initialKeyword }: CoreExperienceProps) {
             </button>
           </div>
         ) : null}
+      </div>
+
+      <div
+        className={`pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full border border-zinc-700 bg-zinc-950/95 px-4 py-2 text-xs uppercase tracking-[0.25em] text-zinc-100 shadow-[0_12px_30px_rgba(0,0,0,0.45)] transition-all duration-300 ${
+          savedToastVisible
+            ? "translate-y-0 opacity-100"
+            : "translate-y-3 opacity-0"
+        }`}
+      >
+        Saved aesthetic poster.
       </div>
     </main>
   );
