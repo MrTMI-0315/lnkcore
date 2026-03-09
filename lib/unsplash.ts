@@ -18,15 +18,49 @@ const STYLE_STOP_WORDS = new Set([
   "photography",
   "street"
 ]);
+const KOREAN_NEGATIVE_TERMS = [
+  "child",
+  "children",
+  "face closeup",
+  "generic wallpaper",
+  "moon closeup",
+  "portrait",
+  "studio portrait",
+  "wallpaper"
+];
+const KOREAN_POSITIVE_CONTEXT_TERMS = [
+  "alley",
+  "apartment",
+  "building",
+  "cafe",
+  "city",
+  "convenience",
+  "crosswalk",
+  "diner",
+  "fashion",
+  "food",
+  "night",
+  "rain",
+  "restaurant",
+  "seoul",
+  "sign",
+  "store",
+  "storefront",
+  "street",
+  "subway",
+  "train",
+  "transit",
+  "urban"
+];
 
 const imageCache = new Map<
   string,
   {
     expiresAt: number;
-    urls: string[];
+    candidates: UnsplashCandidate[];
   }
 >();
-const inFlightSearches = new Map<string, Promise<string[]>>();
+const inFlightSearches = new Map<string, Promise<UnsplashCandidate[]>>();
 
 export class UnsplashError extends Error {
   code: string;
@@ -42,10 +76,17 @@ export class UnsplashError extends Error {
 
 type UnsplashResponse = {
   results?: Array<{
+    alt_description?: string | null;
+    description?: string | null;
     urls?: {
       small?: string;
     };
   }>;
+};
+
+type UnsplashCandidate = {
+  text: string;
+  url: string;
 };
 
 type SearchImageOptions = {
@@ -83,21 +124,66 @@ function dedupeUrls(urls: string[]) {
   return urls.filter((url, index, list) => list.indexOf(url) === index);
 }
 
+function dedupeCandidates(candidates: UnsplashCandidate[]) {
+  return candidates.filter(
+    (candidate, index, list) =>
+      list.findIndex((value) => value.url === candidate.url) === index
+  );
+}
+
+function includesAnyTerm(value: string, terms: string[]) {
+  return terms.some((term) => value.includes(term));
+}
+
+function isKoreanQuery(query: string) {
+  return /\b(korean|korea|seoul)\b/.test(query.toLowerCase());
+}
+
+function isWeakKoreanCandidate(query: string, candidate: UnsplashCandidate) {
+  if (!isKoreanQuery(query)) {
+    return false;
+  }
+
+  const normalizedText = candidate.text.toLowerCase();
+
+  if (!normalizedText) {
+    return false;
+  }
+
+  const hasNegativeTerm = includesAnyTerm(normalizedText, KOREAN_NEGATIVE_TERMS);
+  const hasPositiveContext = includesAnyTerm(
+    normalizedText,
+    KOREAN_POSITIVE_CONTEXT_TERMS
+  );
+
+  return hasNegativeTerm && !hasPositiveContext;
+}
+
 function selectImageUrl(
   query: string,
-  urls: string[],
+  candidates: UnsplashCandidate[],
   excludeUrls?: Set<string>
 ) {
-  const availableUrls = urls.filter((url) => !excludeUrls?.has(url));
+  const filteredCandidates = candidates.filter(
+    (candidate) =>
+      !excludeUrls?.has(candidate.url) && !isWeakKoreanCandidate(query, candidate)
+  );
+  const availableCandidates =
+    filteredCandidates.length > 0
+      ? filteredCandidates
+      : candidates.filter((candidate) => !excludeUrls?.has(candidate.url));
 
-  if (availableUrls.length === 0) {
+  if (availableCandidates.length === 0) {
     return null;
   }
 
-  const candidatePool = availableUrls.slice(0, Math.min(3, availableUrls.length));
+  const candidatePool = availableCandidates.slice(
+    0,
+    Math.min(3, availableCandidates.length)
+  );
   const selectedIndex = hashString(query) % candidatePool.length;
 
-  return candidatePool[selectedIndex] ?? candidatePool[0] ?? null;
+  return candidatePool[selectedIndex]?.url ?? candidatePool[0]?.url ?? null;
 }
 
 function compactQuery(query: string) {
@@ -152,7 +238,7 @@ async function fetchCandidateUrls(query: string, page: number) {
   const cachedResult = imageCache.get(normalizedCacheKey);
 
   if (cachedResult && cachedResult.expiresAt > Date.now()) {
-    return cachedResult.urls;
+    return cachedResult.candidates;
   }
 
   const existingRequest = inFlightSearches.get(normalizedCacheKey);
@@ -207,18 +293,29 @@ async function fetchCandidateUrls(query: string, page: number) {
     }
 
     const payload = (await response.json()) as UnsplashResponse;
-    const urls = dedupeUrls(
+    const candidates = dedupeCandidates(
       payload.results
-        ?.map((result) => result.urls?.small)
-        .filter((candidate): candidate is string => Boolean(candidate)) ?? []
+        ?.map((result) => {
+          const url = result.urls?.small;
+
+          if (!url) {
+            return null;
+          }
+
+          return {
+            text: `${result.description ?? ""} ${result.alt_description ?? ""}`.trim(),
+            url
+          };
+        })
+        .filter((candidate): candidate is UnsplashCandidate => Boolean(candidate)) ?? []
     );
 
     imageCache.set(normalizedCacheKey, {
       expiresAt: Date.now() + IMAGE_CACHE_TTL_MS,
-      urls
+      candidates
     });
 
-    return urls;
+    return candidates;
   })();
 
   inFlightSearches.set(normalizedCacheKey, requestPromise);

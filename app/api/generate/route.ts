@@ -55,6 +55,30 @@ const FILLER_SCENES = [
   "city rain",
   "cafe table"
 ];
+const SLOT_FILLER_QUERIES: Record<string, string[]> = {
+  korean: [
+    "seoul alley night rain",
+    "minimal korean street fashion full body",
+    "korean convenience store storefront",
+    "korean neon sign wet pavement detail",
+    "seoul subway platform interior",
+    "korean late night diner table",
+    "minimal korean street fashion crosswalk",
+    "rainy seoul side street",
+    "seoul urban rain wide shot"
+  ],
+  "korean core": [
+    "seoul alley night rain",
+    "minimal korean street fashion full body",
+    "korean convenience store storefront",
+    "korean neon sign wet pavement detail",
+    "seoul subway platform interior",
+    "korean late night diner table",
+    "minimal korean street fashion crosswalk",
+    "rainy seoul side street",
+    "seoul urban rain wide shot"
+  ]
+};
 
 type PosterPayload = {
   title: string;
@@ -170,7 +194,14 @@ function getFallbackKeyword(keyword: string) {
 }
 
 function buildFillerQueries(keyword: string) {
-  const base = getFallbackKeyword(keyword)?.toLowerCase() ?? keyword.trim().toLowerCase();
+  const normalizedKeyword = normalizeKeyword(keyword);
+  const specialFillers = SLOT_FILLER_QUERIES[normalizedKeyword];
+
+  if (specialFillers) {
+    return specialFillers;
+  }
+
+  const base = getFallbackKeyword(keyword)?.toLowerCase() ?? normalizedKeyword;
 
   if (!base) {
     return GENERIC_FILLER_QUERIES;
@@ -274,7 +305,8 @@ async function resolveImages(
 
   const fillerResults = await Promise.all(
     failedIndexes.map(async (failedIndex, offset) => {
-      const fillerQuery = fillerQueries[offset % fillerQueries.length];
+      const fillerQuery =
+        fillerQueries[failedIndex] ?? fillerQueries[offset % fillerQueries.length];
 
       log("filler_fetch_started", {
         cell: failedIndex + 1,

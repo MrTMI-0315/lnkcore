@@ -55,15 +55,15 @@ const MANUAL_CORE_QUERIES: Record<string, string[]> = {
     "night cafe window street photography"
   ],
   "korean core": [
-    "seoul street night cinematic",
-    "korean convenience store night",
-    "korean subway interior",
-    "seoul apartment buildings moody",
-    "ramen bowl korean aesthetic",
-    "soju bottle table film",
-    "rainy alley korea night",
-    "seoul cafe window moody",
-    "neon street korea"
+    "seoul alley night rain",
+    "korean street fashion full body",
+    "korean convenience store storefront night",
+    "korean neon sign wet pavement detail",
+    "seoul subway platform interior",
+    "korean late night diner interior",
+    "minimal korean street fashion crosswalk",
+    "rainy seoul apartment street",
+    "seoul urban rain wide shot"
   ],
   "sad indie core": [
     "rainy window moody film",
