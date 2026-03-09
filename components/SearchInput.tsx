@@ -1,5 +1,5 @@
 type SearchInputProps = {
-  examples: string[];
+  examples: readonly string[];
   isLoading: boolean;
   value: string;
   onChange: (value: string) => void;
@@ -40,16 +40,16 @@ export function SearchInput({
             onChange(event.target.value);
           }}
         />
-        <div className="flex flex-wrap items-center justify-center gap-3">
+        <div className="flex w-full flex-col items-center justify-center gap-3 sm:flex-row">
           <button
-            className="rounded-full border border-white/15 bg-white px-5 py-2 text-sm font-medium text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:border-white/5 disabled:bg-white/10 disabled:text-white/35"
+            className="w-full rounded-full border border-white/15 bg-white px-5 py-2 text-sm font-medium text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:border-white/5 disabled:bg-white/10 disabled:text-white/35 sm:w-auto"
             disabled={!value.trim() || isLoading}
             type="submit"
           >
             {isLoading ? "Generating..." : "Generate"}
           </button>
           <button
-            className="rounded-full border border-white/15 px-5 py-2 text-sm font-medium text-white transition hover:border-white/35 hover:bg-white/8"
+            className="w-full rounded-full border border-white/15 px-5 py-2 text-sm font-medium text-white transition hover:border-white/35 hover:bg-white/8 sm:w-auto"
             disabled={isLoading}
             type="button"
             onClick={onRandom}
@@ -63,7 +63,7 @@ export function SearchInput({
         {examples.map((example) => (
           <button
             key={example}
-            className="rounded-full border border-transparent px-3 py-1 transition hover:border-white/10 hover:bg-white/[0.05] hover:text-white"
+            className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 transition hover:border-white/30 hover:bg-white/[0.08] hover:text-white"
             type="button"
             onClick={() => {
               onExampleClick(example);

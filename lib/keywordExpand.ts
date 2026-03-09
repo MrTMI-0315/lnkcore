@@ -46,6 +46,20 @@ const PRESET_MAP: Record<string, PresetConfig> = {
     ],
     keywords: ["espresso", "steam", "pastry", "ceramic", "warmth"]
   },
+  "cyberpunk core": {
+    queries: [
+      "cyberpunk neon alley",
+      "hologram billboard city",
+      "rainy futuristic street",
+      "chrome fashion editorial",
+      "glowing arcade machine",
+      "night train platform neon",
+      "cyberpunk motorcycle city",
+      "purple blue city lights",
+      "high rise megacity night"
+    ],
+    keywords: ["neon", "chrome", "rain", "hologram", "megacity"]
+  },
   "korean core": {
     queries: [
       "korean street",
@@ -59,6 +73,20 @@ const PRESET_MAP: Record<string, PresetConfig> = {
       "night city korea"
     ],
     keywords: ["ramen", "neon", "subway", "rain", "convenience"]
+  },
+  "night city core": {
+    queries: [
+      "night city skyline",
+      "rain on taxi window",
+      "neon crosswalk night",
+      "late subway platform",
+      "apartment window city",
+      "downtown convenience light",
+      "street reflections rain",
+      "midnight rooftop view",
+      "empty avenue night"
+    ],
+    keywords: ["midnight", "neon", "subway", "rain", "rooftop"]
   },
   "sad indie core": {
     queries: [
@@ -101,6 +129,20 @@ const PRESET_MAP: Record<string, PresetConfig> = {
       "tokyo skyline dusk"
     ],
     keywords: ["neon", "alley", "ramen", "rain", "transit"]
+  },
+  "vintage film core": {
+    queries: [
+      "35mm film strip",
+      "vintage cinema chair",
+      "dusty projector light",
+      "analog portrait grain",
+      "retro motel sign dusk",
+      "film camera close up",
+      "warm sepia street",
+      "old magazine collage",
+      "sun flare photograph"
+    ],
+    keywords: ["grain", "sepia", "projector", "analog", "nostalgia"]
   }
 };
 
