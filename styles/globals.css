@@ -37,3 +37,12 @@ input {
   background: rgba(255, 255, 255, 0.18);
   color: #ffffff;
 }
+
+.grain-overlay {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-position: 0 0, 13px 13px;
+  background-size: 18px 18px, 23px 23px;
+  mix-blend-mode: soft-light;
+}

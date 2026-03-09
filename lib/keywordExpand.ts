@@ -60,6 +60,20 @@ const PRESET_MAP: Record<string, PresetConfig> = {
     ],
     keywords: ["neon", "chrome", "rain", "hologram", "megacity"]
   },
+  "film camera core": {
+    queries: [
+      "35mm film strip",
+      "film camera close up",
+      "dusty projector light",
+      "retro photo booth",
+      "analog portrait grain",
+      "warm sepia street",
+      "vintage cinema chair",
+      "old magazine collage",
+      "sun flare photograph"
+    ],
+    keywords: ["grain", "analog", "sepia", "projector", "nostalgia"]
+  },
   "korean core": {
     queries: [
       "korean street",
@@ -129,20 +143,6 @@ const PRESET_MAP: Record<string, PresetConfig> = {
       "tokyo skyline dusk"
     ],
     keywords: ["neon", "alley", "ramen", "rain", "transit"]
-  },
-  "vintage film core": {
-    queries: [
-      "35mm film strip",
-      "vintage cinema chair",
-      "dusty projector light",
-      "analog portrait grain",
-      "retro motel sign dusk",
-      "film camera close up",
-      "warm sepia street",
-      "old magazine collage",
-      "sun flare photograph"
-    ],
-    keywords: ["grain", "sepia", "projector", "analog", "nostalgia"]
   }
 };
 

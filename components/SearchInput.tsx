@@ -32,7 +32,7 @@ export function SearchInput({
         <input
           id="core-input"
           autoComplete="off"
-          className="w-full rounded-full border border-white/15 bg-white/[0.04] px-6 py-4 text-center text-base text-white outline-none transition focus:border-white/40 focus:bg-white/[0.07] sm:text-lg"
+          className="w-full rounded-full border border-zinc-700 bg-zinc-950/80 px-6 py-4 text-center text-base text-white outline-none transition focus:border-zinc-400 focus:bg-zinc-900 sm:text-lg"
           disabled={isLoading}
           placeholder="type a core..."
           value={value}
@@ -42,28 +42,28 @@ export function SearchInput({
         />
         <div className="flex w-full flex-col items-center justify-center gap-3 sm:flex-row">
           <button
-            className="w-full rounded-full border border-white/15 bg-white px-5 py-2 text-sm font-medium text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:border-white/5 disabled:bg-white/10 disabled:text-white/35 sm:w-auto"
+            className="w-full rounded-full border border-zinc-200 bg-white px-5 py-2 text-sm font-medium text-black transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:border-zinc-800 disabled:bg-zinc-900 disabled:text-zinc-500 sm:w-auto"
             disabled={!value.trim() || isLoading}
             type="submit"
           >
             {isLoading ? "Generating..." : "Generate"}
           </button>
           <button
-            className="w-full rounded-full border border-white/15 px-5 py-2 text-sm font-medium text-white transition hover:border-white/35 hover:bg-white/8 sm:w-auto"
+            className="w-full rounded-full border border-zinc-700 px-5 py-2 text-sm font-medium text-zinc-100 transition hover:border-zinc-500 hover:bg-zinc-800 sm:w-auto"
             disabled={isLoading}
             type="button"
             onClick={onRandom}
           >
-            Random Core
+            🎲 Random Core
           </button>
         </div>
       </form>
 
-      <div className="flex flex-wrap items-center justify-center gap-2 text-sm text-white/55">
+      <div className="flex flex-wrap items-center justify-center gap-2 text-sm text-zinc-400">
         {examples.map((example) => (
           <button
             key={example}
-            className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 transition hover:border-white/30 hover:bg-white/[0.08] hover:text-white"
+            className="rounded-full border border-zinc-700 px-3 py-1 text-zinc-300 transition hover:bg-zinc-800 hover:text-white"
             type="button"
             onClick={() => {
               onExampleClick(example);

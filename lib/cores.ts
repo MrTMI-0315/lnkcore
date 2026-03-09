@@ -2,12 +2,11 @@ export const CORES = [
   "Korean Core",
   "Berlin Core",
   "Tokyo Core",
-  "Startup Core",
   "Sad Indie Core",
+  "Startup Core",
   "Cafe Core",
   "Night City Core",
-  "Vintage Film Core",
-  "Cyberpunk Core"
+  "Film Camera Core"
 ] as const;
 
 export const EXAMPLE_CORES = [

@@ -7,8 +7,36 @@ export const runtime = "nodejs";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX_REQUESTS = 8;
+const POSTER_CACHE_TTL_MS = 5 * 60_000;
 
 const requestCounts = new Map<string, { count: number; resetAt: number }>();
+const posterCache = new Map<
+  string,
+  {
+    expiresAt: number;
+    payload: {
+      title: string;
+      queries: string[];
+      keywords: string[];
+      images: Array<{
+        query: string;
+        url: string | null;
+      }>;
+    };
+  }
+>();
+const inFlightRequests = new Map<
+  string,
+  Promise<{
+    title: string;
+    queries: string[];
+    keywords: string[];
+    images: Array<{
+      query: string;
+      url: string | null;
+    }>;
+  }>
+>();
 
 function getClientId(request: Request) {
   const forwardedFor = request.headers.get("x-forwarded-for");
@@ -68,6 +96,41 @@ function errorResponse(message: string, status: number, retryAfterSeconds?: numb
   );
 }
 
+function normalizeKeyword(keyword: string) {
+  return keyword.trim().toLowerCase();
+}
+
+function getFallbackKeyword(keyword: string) {
+  const fallback = keyword.replace(/\bcore\b/gi, "").replace(/\s+/g, " ").trim();
+
+  return fallback.length > 0 ? fallback : null;
+}
+
+async function resolveImages(queries: string[]) {
+  return Promise.all(
+    queries.map(async (query) => {
+      try {
+        return {
+          query,
+          url: await searchImage(query)
+        };
+      } catch (caughtError) {
+        if (
+          caughtError instanceof UnsplashError &&
+          (caughtError.status === 429 || caughtError.code === "missing_key")
+        ) {
+          throw caughtError;
+        }
+
+        return {
+          query,
+          url: null
+        };
+      }
+    })
+  );
+}
+
 export async function POST(request: Request) {
   try {
     const rateLimit = enforceRateLimit(getClientId(request));
@@ -90,47 +153,70 @@ export async function POST(request: Request) {
       return errorResponse("Enter a keyword between 1 and 80 characters.", 400);
     }
 
-    const queries = expandKeyword(keyword);
-    const keywords = extractPosterKeywords(keyword, queries);
+    const normalizedKeyword = normalizeKeyword(keyword);
+    const now = Date.now();
+    const cachedPoster = posterCache.get(normalizedKeyword);
 
-    const images = await Promise.all(
-      queries.map(async (query) => {
-        try {
-          return {
-            query,
-            url: await searchImage(query)
-          };
-        } catch (caughtError) {
-          if (
-            caughtError instanceof UnsplashError &&
-            (caughtError.status === 429 || caughtError.code === "missing_key")
-          ) {
-            throw caughtError;
-          }
-
-          return {
-            query,
-            url: null
-          };
-        }
-      })
-    );
-
-    if (images.every((image) => !image.url)) {
-      return errorResponse(
-        "We could not build this poster right now. Try another core in a moment.",
-        502
-      );
+    if (cachedPoster && cachedPoster.expiresAt > now) {
+      return NextResponse.json(cachedPoster.payload);
     }
 
-    return NextResponse.json({
-      title: formatPosterTitle(keyword),
-      queries,
-      keywords,
-      images
-    });
+    const inFlight = inFlightRequests.get(normalizedKeyword);
+
+    if (inFlight) {
+      return NextResponse.json(await inFlight);
+    }
+
+    const payloadPromise = (async () => {
+      let effectiveKeyword = keyword;
+      let queries = expandKeyword(keyword);
+      let images = await resolveImages(queries);
+
+      if (images.every((image) => !image.url)) {
+        const fallbackKeyword = getFallbackKeyword(keyword);
+
+        if (fallbackKeyword && normalizeKeyword(fallbackKeyword) !== normalizedKeyword) {
+          effectiveKeyword = fallbackKeyword;
+          queries = expandKeyword(fallbackKeyword);
+          images = await resolveImages(queries);
+        }
+      }
+
+      if (images.every((image) => !image.url)) {
+        throw new UnsplashError("Couldn't find images for this core.", {
+          code: "no_results",
+          status: 404
+        });
+      }
+
+      const payload = {
+        title: formatPosterTitle(keyword),
+        queries,
+        keywords: extractPosterKeywords(effectiveKeyword, queries),
+        images
+      };
+
+      posterCache.set(normalizedKeyword, {
+        expiresAt: now + POSTER_CACHE_TTL_MS,
+        payload
+      });
+
+      return payload;
+    })();
+
+    inFlightRequests.set(normalizedKeyword, payloadPromise);
+
+    try {
+      return NextResponse.json(await payloadPromise);
+    } finally {
+      inFlightRequests.delete(normalizedKeyword);
+    }
   } catch (caughtError) {
     if (caughtError instanceof UnsplashError) {
+      if (caughtError.code === "no_results") {
+        return errorResponse(caughtError.message, 404);
+      }
+
       if (caughtError.code === "missing_key") {
         return errorResponse("Image source is not configured on the server.", 503);
       }

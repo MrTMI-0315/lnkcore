@@ -15,13 +15,14 @@ export type PosterPayload = {
 };
 
 type PosterGridProps = {
-  copied: boolean;
+  canShare: boolean;
+  copiedImage: boolean;
   isLoading: boolean;
   onReadyChange: (ready: boolean) => void;
-  poster: PosterPayload;
+  poster: PosterPayload | null;
   posterRef: RefObject<HTMLDivElement | null>;
   shareHref: string;
-  onCopyLink: () => void;
+  onCopyImage: () => void;
   onDownload: () => void;
 };
 
@@ -32,23 +33,32 @@ function fallbackLabel(query: string) {
     .join(" ");
 }
 
+const PLACEHOLDER_KEYWORDS = [
+  "mood",
+  "collage",
+  "poster",
+  "identity",
+  "dreamscape"
+];
+
 export function PosterGrid({
-  copied,
+  canShare,
+  copiedImage,
   isLoading,
   onReadyChange,
   poster,
   posterRef,
   shareHref,
-  onCopyLink,
+  onCopyImage,
   onDownload
 }: PosterGridProps) {
   const [loadedCount, setLoadedCount] = useState(0);
   const loadedImages = useRef(new Set<string>());
   const totalImages = useMemo(
-    () => poster.images.filter((image) => Boolean(image.url)).length,
-    [poster.images]
+    () => poster?.images.filter((image) => Boolean(image.url)).length ?? 0,
+    [poster]
   );
-  const isReady = totalImages === 0 || loadedCount >= totalImages;
+  const isReady = !poster || totalImages === 0 || loadedCount >= totalImages;
 
   useEffect(() => {
     onReadyChange(isReady);
@@ -63,26 +73,31 @@ export function PosterGrid({
     setLoadedCount((currentCount) => currentCount + 1);
   };
 
+  const gridItems =
+    poster?.images ??
+    Array.from({ length: 9 }, (_, index) => ({
+      query: `placeholder-${index}`,
+      url: null
+    }));
+
   return (
-    <section
-      className={`mx-auto w-[90vw] max-w-xl transition-all duration-700 ${
-        isLoading || !isReady ? "translate-y-3 opacity-0" : "translate-y-0 opacity-100"
-      }`}
-    >
+    <section className="mx-auto flex w-full max-w-xl flex-col items-center gap-4">
       <div
         ref={posterRef}
-        className="rounded-[2rem] border border-white/10 bg-[#050505] p-4 shadow-[0_30px_120px_rgba(0,0,0,0.55)]"
+        className="w-[90vw] max-w-xl rounded-3xl border border-zinc-800 bg-black/75 p-4 shadow-2xl backdrop-blur-sm sm:p-5"
       >
-        <h2 className="mb-5 text-center text-3xl font-semibold uppercase tracking-[0.35em] text-white sm:text-4xl">
-          {poster.title}
+        <h2 className="mb-4 text-center text-lg font-semibold uppercase tracking-[0.25em] text-zinc-100">
+          {poster?.title ?? "AESTHETIC IDENTITY"}
         </h2>
 
-        <div className="grid grid-cols-3 gap-1 overflow-hidden rounded-[1.5rem] bg-white/6 p-1">
-          {poster.images.map((image, index) =>
+        <div className="grid grid-cols-3 gap-[2px] overflow-hidden rounded-[1.35rem] bg-zinc-900 p-[2px]">
+          {gridItems.map((image, index) =>
             image.url ? (
               <div
                 key={`${image.query}-${index}`}
-                className="relative aspect-square overflow-hidden"
+                className={`relative aspect-square overflow-hidden bg-zinc-950 transition-opacity duration-700 ${
+                  isLoading || !isReady ? "opacity-0" : "opacity-100"
+                }`}
               >
                 <Image
                   alt={image.query}
@@ -98,36 +113,45 @@ export function PosterGrid({
             ) : (
               <div
                 key={`${image.query}-${index}`}
-                className="flex aspect-square items-center justify-center bg-white/[0.06] px-3 text-center text-[10px] uppercase tracking-[0.25em] text-white/35"
+                className={`flex aspect-square items-center justify-center bg-zinc-900 px-3 text-center text-[10px] uppercase tracking-[0.25em] text-zinc-500 ${
+                  isLoading ? "animate-pulse" : ""
+                }`}
               >
-                {fallbackLabel(image.query)}
+                {poster ? fallbackLabel(image.query) : "□"}
               </div>
             )
           )}
         </div>
 
-        <p className="mt-5 text-center text-xs uppercase tracking-[0.28em] text-white/80 sm:text-sm">
-          {poster.keywords.join(" • ")}
+        <p className="mt-4 text-center text-xs uppercase tracking-wide text-zinc-400 opacity-70">
+          {(poster?.keywords ?? PLACEHOLDER_KEYWORDS).join(" • ")}
         </p>
       </div>
 
-      <div className="mt-4 flex flex-col items-center justify-center gap-3 sm:flex-row">
+      <div className="flex w-[90vw] max-w-xl flex-col items-center justify-center gap-3 sm:flex-row">
         <button
-          className="w-full rounded-full border border-white/15 bg-white px-5 py-2 text-sm font-medium text-black transition hover:bg-white/90 sm:w-auto"
+          className="w-full rounded-full border border-zinc-200 bg-white px-5 py-2 text-sm font-medium text-black transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:border-zinc-800 disabled:bg-zinc-900 disabled:text-zinc-500 sm:w-auto"
+          disabled={!canShare}
           type="button"
           onClick={onDownload}
         >
           Download Poster
         </button>
         <button
-          className="w-full rounded-full border border-white/15 px-5 py-2 text-sm font-medium text-white transition hover:border-white/35 hover:bg-white/8 sm:w-auto"
+          className="w-full rounded-full border border-zinc-700 px-5 py-2 text-sm font-medium text-zinc-100 transition hover:border-zinc-500 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:border-zinc-800 disabled:text-zinc-500 sm:w-auto"
+          disabled={!canShare}
           type="button"
-          onClick={onCopyLink}
+          onClick={onCopyImage}
         >
-          {copied ? "Link Copied" : "Copy Link"}
+          {copiedImage ? "Image Copied" : "Copy Image"}
         </button>
         <a
-          className="w-full rounded-full border border-white/15 px-5 py-2 text-center text-sm font-medium text-white transition hover:border-white/35 hover:bg-white/8 sm:w-auto"
+          aria-disabled={!canShare}
+          className={`w-full rounded-full border px-5 py-2 text-center text-sm font-medium transition sm:w-auto ${
+            canShare
+              ? "border-zinc-700 text-zinc-100 hover:border-zinc-500 hover:bg-zinc-800"
+              : "pointer-events-none border-zinc-800 text-zinc-500"
+          }`}
           href={shareHref}
           rel="noreferrer"
           target="_blank"
