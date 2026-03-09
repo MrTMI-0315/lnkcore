@@ -37,6 +37,14 @@ const inFlightRequests = new Map<
     }>;
   }>
 >();
+const GENERIC_FILLER_QUERIES = [
+  "city night aesthetic",
+  "street photography film",
+  "urban lights night",
+  "moody interior aesthetic",
+  "cinematic cafe night",
+  "neon city rain"
+];
 
 function getClientId(request: Request) {
   const forwardedFor = request.headers.get("x-forwarded-for");
@@ -107,28 +115,69 @@ function getFallbackKeyword(keyword: string) {
 }
 
 async function resolveImages(queries: string[]) {
-  return Promise.all(
-    queries.map(async (query) => {
-      try {
-        return {
-          query,
-          url: await searchImage(query)
-        };
-      } catch (caughtError) {
-        if (
-          caughtError instanceof UnsplashError &&
-          (caughtError.status === 429 || caughtError.code === "missing_key")
-        ) {
-          throw caughtError;
-        }
+  const usedUrls = new Set<string>();
+  const images: Array<{ query: string; url: string | null }> = [];
 
-        return {
-          query,
-          url: null
+  for (const query of queries) {
+    try {
+      const url = await searchImage(query, {
+        excludeUrls: usedUrls
+      });
+
+      if (url) {
+        usedUrls.add(url);
+      }
+
+      images.push({
+        query,
+        url
+      });
+    } catch (caughtError) {
+      if (
+        caughtError instanceof UnsplashError &&
+        (caughtError.status === 429 || caughtError.code === "missing_key")
+      ) {
+        throw caughtError;
+      }
+
+      images.push({
+        query,
+        url: null
+      });
+    }
+  }
+
+  const failedIndexes = images
+    .map((image, index) => (image.url ? null : index))
+    .filter((index): index is number => index !== null);
+
+  for (const [offset, failedIndex] of failedIndexes.entries()) {
+    const fillerQuery =
+      GENERIC_FILLER_QUERIES[offset % GENERIC_FILLER_QUERIES.length];
+
+    try {
+      const url = await searchImage(fillerQuery, {
+        excludeUrls: usedUrls
+      });
+
+      if (url) {
+        usedUrls.add(url);
+        images[failedIndex] = {
+          query: fillerQuery,
+          url
         };
       }
-    })
-  );
+    } catch (caughtError) {
+      if (
+        caughtError instanceof UnsplashError &&
+        (caughtError.status === 429 || caughtError.code === "missing_key")
+      ) {
+        throw caughtError;
+      }
+    }
+  }
+
+  return images;
 }
 
 export async function POST(request: Request) {

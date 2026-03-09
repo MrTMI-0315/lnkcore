@@ -1,14 +1,23 @@
 const UNSPLASH_ENDPOINT = "https://api.unsplash.com/search/photos";
 const IMAGE_CACHE_TTL_MS = 10 * 60_000;
+const MAX_RANDOM_PAGE = 5;
+const MAX_RETRIES = 2;
+const RESULTS_PER_PAGE = 5;
+const GENERIC_FALLBACK_QUERIES = [
+  "city night aesthetic",
+  "street photography film",
+  "urban lights night",
+  "cinematic interior aesthetic"
+];
 
 const imageCache = new Map<
   string,
   {
     expiresAt: number;
-    url: string | null;
+    urls: string[];
   }
 >();
-const inFlightSearches = new Map<string, Promise<string | null>>();
+const inFlightSearches = new Map<string, Promise<string[]>>();
 
 export class UnsplashError extends Error {
   code: string;
@@ -30,15 +39,49 @@ type UnsplashResponse = {
   }>;
 };
 
-export async function searchImage(query: string) {
+type SearchImageOptions = {
+  excludeUrls?: Set<string>;
+};
+
+function randomPage() {
+  return Math.floor(Math.random() * MAX_RANDOM_PAGE) + 1;
+}
+
+function dedupeUrls(urls: string[]) {
+  return urls.filter((url, index, list) => list.indexOf(url) === index);
+}
+
+function selectImageUrl(urls: string[], excludeUrls?: Set<string>) {
+  return urls.find((url) => !excludeUrls?.has(url)) ?? null;
+}
+
+function buildFallbackQueries(query: string) {
   const normalizedQuery = query.trim().toLowerCase();
-  const cachedResult = imageCache.get(normalizedQuery);
+  const words = normalizedQuery.split(/\s+/).filter(Boolean);
+  const lastWord = words.at(-1);
+  const strippedQuery = normalizedQuery.replace(/\bcore\b/g, "").trim();
+
+  return dedupeUrls(
+    [
+      normalizedQuery,
+      strippedQuery,
+      lastWord,
+      lastWord ? `${lastWord} aesthetic` : null,
+      lastWord ? `${lastWord} night` : null,
+      ...GENERIC_FALLBACK_QUERIES
+    ].filter((value): value is string => Boolean(value))
+  );
+}
+
+async function fetchCandidateUrls(query: string, page: number) {
+  const normalizedCacheKey = `${query.trim().toLowerCase()}::${page}`;
+  const cachedResult = imageCache.get(normalizedCacheKey);
 
   if (cachedResult && cachedResult.expiresAt > Date.now()) {
-    return cachedResult.url;
+    return cachedResult.urls;
   }
 
-  const existingRequest = inFlightSearches.get(normalizedQuery);
+  const existingRequest = inFlightSearches.get(normalizedCacheKey);
 
   if (existingRequest) {
     return existingRequest;
@@ -55,12 +98,16 @@ export async function searchImage(query: string) {
 
   const url = new URL(UNSPLASH_ENDPOINT);
   url.searchParams.set("query", query);
-  url.searchParams.set("page", "1");
-  url.searchParams.set("per_page", "1");
+  url.searchParams.set("page", String(page));
+  url.searchParams.set("per_page", String(RESULTS_PER_PAGE));
   url.searchParams.set("orientation", "squarish");
   url.searchParams.set("content_filter", "high");
 
   const requestPromise = (async () => {
+    if (process.env.NODE_ENV !== "production") {
+      console.log("Unsplash query:", query, "page:", page);
+    }
+
     const response = await fetch(url.toString(), {
       headers: {
         Authorization: `Client-ID ${accessKey}`,
@@ -86,21 +133,45 @@ export async function searchImage(query: string) {
     }
 
     const payload = (await response.json()) as UnsplashResponse;
-    const imageUrl = payload.results?.[0]?.urls?.small ?? null;
+    const urls = dedupeUrls(
+      payload.results
+        ?.map((result) => result.urls?.small)
+        .filter((candidate): candidate is string => Boolean(candidate)) ?? []
+    );
 
-    imageCache.set(normalizedQuery, {
+    imageCache.set(normalizedCacheKey, {
       expiresAt: Date.now() + IMAGE_CACHE_TTL_MS,
-      url: imageUrl
+      urls
     });
 
-    return imageUrl;
+    return urls;
   })();
 
-  inFlightSearches.set(normalizedQuery, requestPromise);
+  inFlightSearches.set(normalizedCacheKey, requestPromise);
 
   try {
     return await requestPromise;
   } finally {
-    inFlightSearches.delete(normalizedQuery);
+    inFlightSearches.delete(normalizedCacheKey);
   }
+}
+
+export async function searchImage(
+  query: string,
+  options: SearchImageOptions = {}
+) {
+  const fallbackQueries = buildFallbackQueries(query);
+
+  for (const fallbackQuery of fallbackQueries) {
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
+      const candidateUrls = await fetchCandidateUrls(fallbackQuery, randomPage());
+      const selectedUrl = selectImageUrl(candidateUrls, options.excludeUrls);
+
+      if (selectedUrl) {
+        return selectedUrl;
+      }
+    }
+  }
+
+  return null;
 }
